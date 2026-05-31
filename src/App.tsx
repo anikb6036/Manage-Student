@@ -43,6 +43,19 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
+// Auto-detect and perform a one-time clean-up migration of old dummy/simulation storage data
+if (typeof window !== 'undefined' && !localStorage.getItem('db-migrated-to-real-v2')) {
+  localStorage.removeItem('db-users');
+  localStorage.removeItem('db-schedules');
+  localStorage.removeItem('db-progress');
+  localStorage.removeItem('db-notifications');
+  localStorage.removeItem('db-backups');
+  localStorage.removeItem('db-registration-requests');
+  localStorage.removeItem('db-simulated-emails');
+  localStorage.removeItem('active-user');
+  localStorage.setItem('db-migrated-to-real-v2', 'true');
+}
+
 function AppContent() {
   const { isDark, toggleTheme } = useTheme();
 
@@ -73,31 +86,7 @@ function AppContent() {
 
   // Pending admission registration requests state
   const [registrationRequests, setRegistrationRequests] = useState<RegistrationRequest[]>(() => {
-    const preseededRequests: RegistrationRequest[] = [
-      {
-        id: 'req-demo-1',
-        name: 'Samantha Wilson',
-        email: 'samantha.wilson@demo.com',
-        phone: '+1 (555) 0182',
-        status: 'pending',
-        submittedDate: '2026-05-30',
-        assignedInstructorId: 'instructor-1',
-        username: 'samantha_wilson_822',
-        password: 'Prism@Samantha822'
-      },
-      {
-        id: 'req-demo-2',
-        name: 'Lily Evans',
-        email: 'lily.evans@demo.com',
-        phone: '+1 (555) 0173',
-        status: 'pending',
-        submittedDate: '2026-05-31',
-        assignedInstructorId: 'instructor-2',
-        username: 'lily_evans_482',
-        password: 'Prism@Lily482'
-      }
-    ];
-    return getSavedState<RegistrationRequest[]>('db-registration-requests', preseededRequests);
+    return getSavedState<RegistrationRequest[]>('db-registration-requests', []);
   });
 
   // Simulated student mailbox communications
@@ -1324,7 +1313,7 @@ function AppContent() {
                       <div>
                         <p className="text-xs text-slate-401 dark:text-gray-500 font-mono uppercase tracking-widest font-semibold">Assigned Mentor Advisor</p>
                         <p className="text-xl font-serif text-amber-500 mt-2 italic font-bold">
-                          {INITIAL_USERS.find(i => i.id === currentUser.assignedInstructorId)?.name || 'Eleanor Vance'}
+                          {users.find(i => i.id === currentUser.assignedInstructorId)?.name || 'No Assigned Advisor'}
                         </p>
                       </div>
                       <p className="text-[10px] text-slate-400 dark:text-gray-500 mt-4">Profile synced successfully</p>
