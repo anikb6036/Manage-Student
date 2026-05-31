@@ -15,7 +15,31 @@ export interface UserAccount {
   joinedDate: string;
   specialization?: string; // For instructors
   assignedInstructorId?: string; // For students
+  username?: string; // Optional username for credentials login
+  password?: string; // Optional password for credentials login
 }
+
+export interface RegistrationRequest {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  assignedInstructorId?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  submittedDate: string;
+  username: string; // Auto-generated username
+  password: string; // Auto-generated password
+}
+
+export interface SimulatedEmail {
+  id: string;
+  to: string;
+  from: string;
+  subject: string;
+  body: string;
+  timestamp: string;
+}
+
 
 export interface ClassSchedule {
   id: string;

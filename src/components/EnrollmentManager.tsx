@@ -4,8 +4,8 @@
  */
 
 import React, { useState } from 'react';
-import { UserAccount, ClassSchedule } from '../types';
-import { UserPlus, Search, User, Filter, Trash2, Mail, Phone, Calendar, ArrowRight, BookOpen } from 'lucide-react';
+import { UserAccount, ClassSchedule, RegistrationRequest } from '../types';
+import { UserPlus, Search, User, Filter, Trash2, Mail, Phone, Calendar, ArrowRight, BookOpen, Check, X, ShieldAlert } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface EnrollmentManagerProps {
@@ -16,6 +16,9 @@ interface EnrollmentManagerProps {
   onAddStudent: (student: Omit<UserAccount, 'id' | 'joinedDate'>) => void;
   onRemoveStudent: (id: string) => void;
   onEnrollStudentInClass: (studentId: string, classId: string) => void;
+  registrationRequests: RegistrationRequest[];
+  onApproveRequest: (id: string) => void;
+  onRejectRequest: (id: string) => void;
 }
 
 export default function EnrollmentManager({
@@ -25,7 +28,10 @@ export default function EnrollmentManager({
   schedules,
   onAddStudent,
   onRemoveStudent,
-  onEnrollStudentInClass
+  onEnrollStudentInClass,
+  registrationRequests,
+  onApproveRequest,
+  onRejectRequest
 }: EnrollmentManagerProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedInstructorId, setSelectedInstructorId] = useState<'all' | string>('all');
@@ -106,6 +112,91 @@ export default function EnrollmentManager({
           <p className="mt-2 text-xs text-slate-400 dark:text-gray-500">Diverse curricula across the center</p>
         </div>
       </div>
+
+      {currentUser.role === 'admin' && (
+        <div className="p-6 rounded-3xl border border-amber-500/25 bg-amber-500/[0.02] dark:bg-[#161618] dark:border-white/5 shadow-sm mb-6">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 mb-4">
+            <div>
+              <h3 className="text-base font-serif italic text-amber-500 font-bold flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-amber-500" />
+                Pending Fast Student Registration Requests ({registrationRequests.filter(r => r.status === 'pending').length})
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
+                Review submitted applications from the public fast-registration portal. Accepting generates their profile and sends their username/password via simulated mail.
+              </p>
+            </div>
+          </div>
+
+          {registrationRequests.filter(r => r.status === 'pending').length === 0 ? (
+            <div className="p-8 text-center text-xs text-slate-400 dark:text-gray-500 font-mono bg-slate-50/50 dark:bg-[#0F0F11]/50 border border-dashed border-slate-200 dark:border-white/5 rounded-2xl select-none">
+              No pending student registration tickets in queue. Use "Fast Student Registration" on the login screen to submit requests.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {registrationRequests.filter(r => r.status === 'pending').map(req => (
+                <div
+                  key={req.id}
+                  className="p-4 rounded-2xl bg-white dark:bg-[#0F0F11] border border-slate-150/80 dark:border-white/5 flex flex-col justify-between gap-3 shadow-xs"
+                >
+                  <div>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-sm font-bold text-slate-900 dark:text-gray-100 font-serif">{req.name}</p>
+                        <p className="text-[10px] text-slate-400 dark:text-gray-500 font-mono mt-0.5">Submitted: {req.submittedDate}</p>
+                      </div>
+                      <span className="text-[9px] font-mono font-bold tracking-wider text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full uppercase">
+                        PENDING APPROVAL
+                      </span>
+                    </div>
+
+                    <div className="mt-3 space-y-1.5 text-xs text-slate-600 dark:text-gray-400">
+                      <p className="flex items-center gap-2 bg-slate-50 dark:bg-[#161618] p-1.5 px-2 rounded-lg border dark:border-white/5">
+                        <Mail className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                        <span className="truncate">{req.email}</span>
+                      </p>
+                      {req.phone && (
+                        <p className="flex items-center gap-2 bg-slate-50 dark:bg-[#161618] p-1.5 px-2 rounded-lg border dark:border-white/5">
+                          <Phone className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                          <span>{req.phone}</span>
+                        </p>
+                      )}
+                      <p className="flex items-center gap-2 bg-slate-50 dark:bg-[#161618] p-1.5 px-2 rounded-lg border dark:border-white/5">
+                        <User className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                        <span>Pre-assigned Mentor: <strong className="text-amber-500 font-semibold">{getInstructorName(req.assignedInstructorId)}</strong></span>
+                      </p>
+
+                      <div className="p-2.5 rounded-xl bg-orange-500/[0.02] border border-amber-500/10 mt-2 font-mono text-[10px] space-y-1 select-none">
+                        <p className="font-bold text-amber-500 text-[9px] uppercase tracking-wider">Security Credentials Drafted:</p>
+                        <div className="flex justify-between text-slate-500 dark:text-gray-400 border-t dark:border-white/5 pt-1">
+                          <span>User: <strong className="text-slate-800 dark:text-gray-200">{req.username}</strong></span>
+                          <span>Pass: <strong className="text-slate-800 dark:text-gray-200">{req.password}</strong></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 justify-end pt-3 border-t border-slate-100 dark:border-white/5">
+                    <button
+                      type="button"
+                      onClick={() => onRejectRequest(req.id)}
+                      className="px-3 py-1.5 border border-slate-200 dark:border-white/5 hover:bg-rose-500/10 hover:text-rose-500 dark:hover:text-rose-400 text-slate-500 transition rounded-xl text-xs font-bold cursor-pointer"
+                    >
+                      Decline Request
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onApproveRequest(req.id)}
+                      className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-amber-950 font-bold rounded-xl text-xs flex items-center gap-1.5 transition cursor-pointer"
+                    >
+                      <Check className="w-3.5 h-3.5" /> Accept & Enroll Student
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="bg-white dark:bg-[#161618] rounded-3xl border border-slate-150/80 dark:border-white/5 shadow-sm p-6 md:p-8">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
