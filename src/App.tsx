@@ -47,9 +47,14 @@ import {
   Lock,
   Sparkles,
   MapPin,
-  GraduationCap
+  GraduationCap,
+  Camera,
+  Trash2,
+  Upload
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { COUNTRY_PHONE_CONFIGS } from './countryPhoneData';
+import { GEO_COUNTRIES, getSmartPostOffices } from './geoAddressData';
 
 // Auto-detect and perform a one-time clean-up migration of old dummy/simulation storage data
 if (typeof window !== 'undefined' && !localStorage.getItem('db-migrated-to-real-v5')) {
@@ -117,9 +122,192 @@ function AppContent() {
   const [fastInstructorId, setFastInstructorId] = useState('');
   const [fastFatherName, setFastFatherName] = useState('');
   const [fastFatherPhone, setFastFatherPhone] = useState('');
-  const [fastAddress, setFastAddress] = useState('');
+  const [fastAddressCountry, setFastAddressCountry] = useState('India');
+  const [fastAddressState, setFastAddressState] = useState('West Bengal');
+  const [fastAddressDistrict, setFastAddressDistrict] = useState('Kolkata');
+  const [fastAddressPin, setFastAddressPin] = useState('700001');
+  const [fastAddressPostOffice, setFastAddressPostOffice] = useState('GPO Kolkata');
+  const [fastAddressStreet, setFastAddressStreet] = useState('');
+  const [fastAddressError, setFastAddressError] = useState('');
+
+  const [fastNameError, setFastNameError] = useState('');
+  const [fastEmailError, setFastEmailError] = useState('');
+  const [fastGenderError, setFastGenderError] = useState('');
+  const [fastDobError, setFastDobError] = useState('');
+  const [fastFatherNameError, setFastFatherNameError] = useState('');
+  const [fastLastQualificationError, setFastLastQualificationError] = useState('');
   const [fastLastQualification, setFastLastQualification] = useState('');
+  const [fastGender, setFastGender] = useState('');
+  const [fastDob, setFastDob] = useState('');
+  const [fastAvatarUrl, setFastAvatarUrl] = useState('');
+  const [fastAvatarError, setFastAvatarError] = useState('');
+
+  // Phone country verification states
+  const [fastPhonePrefix, setFastPhonePrefix] = useState('+91');
+  const [fastPhoneError, setFastPhoneError] = useState('');
+  const [fastFatherPhonePrefix, setFastFatherPhonePrefix] = useState('+91');
+  const [fastFatherPhoneError, setFastFatherPhoneError] = useState('');
+
   const [fastRegSuccess, setFastRegSuccess] = useState<RegistrationRequest | null>(null);
+
+  // Live India Postal Department API states
+  const [apiPostOffices, setApiPostOffices] = useState<string[]>([]);
+  const [apiLoading, setApiLoading] = useState<boolean>(false);
+  const [apiSuccessMsg, setApiSuccessMsg] = useState<string>('');
+
+  useEffect(() => {
+    const parsedPin = fastAddressPin.trim();
+    if (fastAddressCountry === 'India' && parsedPin.length === 6 && /^\d{6}$/.test(parsedPin)) {
+      let isMounted = true;
+      setApiLoading(true);
+      setApiSuccessMsg('');
+      setFastAddressError('');
+      
+      const fetchPostalDetails = async () => {
+        try {
+          // Attempt 1: Fetch from api.postalpincode.in
+          const res = await fetch(`https://api.postalpincode.in/pincode/${parsedPin}`);
+          if (!res.ok) throw new Error('First API status error');
+          const data = await res.json();
+          
+          if (!isMounted) return;
+          
+          if (data && data[0] && data[0].Status === 'Success') {
+            const postOfficeList = data[0].PostOffice;
+            if (postOfficeList && postOfficeList.length > 0) {
+              const firstPO = postOfficeList[0];
+              const names = postOfficeList.map((po: any) => po.Name).sort();
+              setApiPostOffices(names);
+              
+              if (firstPO.State) {
+                setFastAddressState(firstPO.State);
+              }
+              if (firstPO.District) {
+                setFastAddressDistrict(firstPO.District);
+              }
+              
+              setFastAddressPostOffice(names[0]);
+              setApiSuccessMsg(`Fetched live details for PIN ${parsedPin} (${firstPO.District}, ${firstPO.State}) successfully!`);
+              setFastAddressError('');
+              setApiLoading(false);
+              return;
+            }
+          }
+          throw new Error('Not found or status check failed');
+        } catch (err) {
+          console.warn('Primary PIN API failed, trying fallback zippopotam.us...', err);
+          if (!isMounted) return;
+          
+          try {
+            // Attempt 2: Fallback to api.zippopotam.us (CORS-friendly, extremely reliable)
+            const res = await fetch(`https://api.zippopotam.us/in/${parsedPin}`);
+            if (!res.ok) throw new Error('Backup API failed');
+            const data = await res.json();
+            
+            if (!isMounted) return;
+            
+            const placeList = data.places || [];
+            if (placeList.length > 0) {
+              const names = placeList.map((p: any) => p["place name"]).sort();
+              setApiPostOffices(names);
+              
+              const firstPlace = placeList[0];
+              if (firstPlace.state) {
+                setFastAddressState(firstPlace.state);
+              }
+              
+              // Map state and guess district
+              let dist = '';
+              const firstPlaceName = firstPlace["place name"] || '';
+              const activeCountry = GEO_COUNTRIES.find(c => c.name === 'India');
+              const activeState = activeCountry?.states.find(s => s.name.toLowerCase() === (firstPlace.state || '').toLowerCase());
+              if (activeState) {
+                const foundDist = activeState.districts.find(d => 
+                  firstPlaceName.toLowerCase().includes(d.toLowerCase()) || 
+                  d.toLowerCase().includes(firstPlaceName.toLowerCase())
+                );
+                if (foundDist) {
+                  dist = foundDist;
+                } else {
+                  dist = firstPlaceName.split(' ')[0] || activeState.districts[0] || '';
+                }
+              } else {
+                dist = firstPlaceName.split(' ')[0] || '';
+              }
+              
+              if (dist) {
+                setFastAddressDistrict(dist);
+              }
+              
+              setFastAddressPostOffice(names[0]);
+              setApiSuccessMsg(`Fetched live details for PIN ${parsedPin} (${dist}, ${firstPlace.state || 'India'}) successfully!`);
+              setFastAddressError('');
+              setApiLoading(false);
+              return;
+            } else {
+              throw new Error('Empty places');
+            }
+          } catch (fallbackErr) {
+            console.error('All postal APIs failed:', fallbackErr);
+            if (!isMounted) return;
+            
+            // If it's one of pre-coded dummy samples, keep local options
+            if (parsedPin === '700001' || parsedPin === '700091' || parsedPin === '700102') {
+              setApiPostOffices([]);
+              setApiSuccessMsg('');
+            } else {
+              setApiPostOffices([]);
+              setFastAddressError('No live records found for this PIN code. Please verify or use custom input.');
+            }
+            setApiLoading(false);
+          }
+        }
+      };
+
+      fetchPostalDetails();
+
+      return () => {
+        isMounted = false;
+      };
+    } else {
+      setApiPostOffices([]);
+      setApiSuccessMsg('');
+    }
+  }, [fastAddressPin, fastAddressCountry]);
+
+  const getFallbackAddressInfo = (countryName: string, stateName: string, districtName: string): { pin: string, postOffice: string } => {
+    const activeCountry = GEO_COUNTRIES.find(c => c.name === countryName);
+    const activeState = activeCountry?.states.find(s => s.name === stateName);
+    
+    if (activeState) {
+      const postOfficesMap = activeState.postOffices || {};
+      const pinKeys = Object.keys(postOfficesMap);
+      
+      if (pinKeys.length > 0) {
+        // 1. Try to find a PIN key whose post offices contain the districtName (case-insensitive)
+        for (const pin of pinKeys) {
+          const poList = postOfficesMap[pin];
+          if (poList && poList.some(po => po.toLowerCase().includes(districtName.toLowerCase()))) {
+            return { pin, postOffice: poList[0] };
+          }
+        }
+        
+        // 2. Otherwise use the first available PIN key
+        const firstPin = pinKeys[0];
+        return { pin: firstPin, postOffice: postOfficesMap[firstPin]?.[0] || '' };
+      }
+    }
+    
+    // 3. Fallback pin generation
+    let pin = '110001';
+    if (countryName === 'United States') pin = '90001';
+    else if (countryName === 'Bangladesh') pin = '1000';
+    else if (countryName === 'Canada') pin = 'M5V 1A1';
+    else if (countryName === 'United Kingdom') pin = 'EC1A 1BB';
+    
+    const generated = getSmartPostOffices(countryName, stateName, districtName, pin);
+    return { pin, postOffice: generated[0] || '' };
+  };
 
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -498,7 +686,10 @@ function AppContent() {
     fatherName?: string,
     fatherPhone?: string,
     address?: string,
-    lastQualification?: string
+    lastQualification?: string,
+    gender?: string,
+    dob?: string,
+    avatarUrl?: string
   ) => {
     const cleanName = name.trim();
     const cleanEmail = email.trim().toLowerCase();
@@ -510,7 +701,7 @@ function AppContent() {
     
     const titleName = cleanName.split(' ')[0] || 'Student';
     const password = `Prism@${titleName}${randomNum}`;
-
+  
     const newRequest: RegistrationRequest = {
       id: generateUniqueId('req'),
       name: cleanName,
@@ -524,7 +715,10 @@ function AppContent() {
       fatherName: fatherName?.trim() || undefined,
       fatherPhone: fatherPhone?.trim() || undefined,
       address: address?.trim() || undefined,
-      lastQualification: lastQualification?.trim() || undefined
+      lastQualification: lastQualification?.trim() || undefined,
+      gender: gender?.trim() || undefined,
+      dob: dob?.trim() || undefined,
+      avatarUrl: avatarUrl || undefined
     };
 
     setRegistrationRequests(prev => [newRequest, ...prev]);
@@ -560,11 +754,13 @@ function AppContent() {
       assignedInstructorId: r.assignedInstructorId,
       username: r.username,
       password: r.password,
-      avatarUrl: `https://images.unsplash.com/photo-${['1534528741775-53994a69daeb', '1506794778202-cad84cf45f1d', '1517841905240-472988babdf9', '1492562080023-ab3db95bfbce'][Math.floor(Math.random() * 4)]}?w=150`,
+      avatarUrl: r.avatarUrl || `https://images.unsplash.com/photo-${['1534528741775-53994a69daeb', '1506794778202-cad84cf45f1d', '1517841905240-472988babdf9', '1492562080023-ab3db95bfbce'][Math.floor(Math.random() * 4)]}?w=150`,
       fatherName: r.fatherName,
       fatherPhone: r.fatherPhone,
       address: r.address,
-      lastQualification: r.lastQualification
+      lastQualification: r.lastQualification,
+      gender: r.gender,
+      dob: r.dob
     };
 
     // Send simulated email
@@ -657,26 +853,159 @@ function AppContent() {
 
   const handleFastStudentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fastName || !fastEmail) return;
+    
+    // Reset all errors
+    setFastNameError('');
+    setFastEmailError('');
+    setFastGenderError('');
+    setFastDobError('');
+    setFastFatherNameError('');
+    setFastLastQualificationError('');
+    setFastAddressError('');
+    setFastPhoneError('');
+    setFastFatherPhoneError('');
+
+    let hasError = false;
+
+    // Check Name
+    if (!fastName.trim()) {
+      setFastNameError('Full legal name is required');
+      hasError = true;
+    }
+
+    // Check Email
+    if (!fastEmail.trim()) {
+      setFastEmailError('Email address is required');
+      hasError = true;
+    }
+
+    // Check Gender
+    if (!fastGender) {
+      setFastGenderError('Gender selection is required');
+      hasError = true;
+    }
+
+    // Check Date of Birth
+    if (!fastDob) {
+      setFastDobError('Date of birth is required');
+      hasError = true;
+    }
+
+    // Check Father Name
+    if (!fastFatherName.trim()) {
+      setFastFatherNameError("Father's name is required");
+      hasError = true;
+    }
+
+    // Check Last Qualification
+    if (!fastLastQualification.trim()) {
+      setFastLastQualificationError('Last qualification is required');
+      hasError = true;
+    }
+
+    // Check Residential Address selections
+    if (!fastAddressCountry) {
+      setFastAddressError('Country selection is required');
+      hasError = true;
+    } else if (!fastAddressState) {
+      setFastAddressError('State selection is required');
+      hasError = true;
+    } else if (!fastAddressDistrict) {
+      setFastAddressError('District selection is required');
+      hasError = true;
+    } else if (!fastAddressPin.trim()) {
+      setFastAddressError('PIN Code / ZIP code is required');
+      hasError = true;
+    } else if (!fastAddressPostOffice) {
+      setFastAddressError('Post office selection is required');
+      hasError = true;
+    }
+
+    // Check profile photo (mandatory + size limit check)
+    if (fastAvatarError) {
+      hasError = true;
+    } else if (!fastAvatarUrl) {
+      setFastAvatarError("photo size more then 150kb please upload photo under 150kb");
+      hasError = true;
+    }
+
+    // Check Phone number length
+    if (!fastPhone) {
+      setFastPhoneError("Phone number is required");
+      hasError = true;
+    } else {
+      const config = COUNTRY_PHONE_CONFIGS.find(c => c.code === fastPhonePrefix);
+      const reqLen = config ? config.length : 10;
+      if (fastPhone.length !== reqLen) {
+        setFastPhoneError(`Phone number must be exactly ${reqLen} digits for ${fastPhonePrefix}`);
+        hasError = true;
+      }
+    }
+
+    // Check Father Phone number length
+    if (!fastFatherPhone) {
+      setFastFatherPhoneError("Father's phone number is required");
+      hasError = true;
+    } else {
+      const fConfig = COUNTRY_PHONE_CONFIGS.find(c => c.code === fastFatherPhonePrefix);
+      const fReqLen = fConfig ? fConfig.length : 10;
+      if (fastFatherPhone.length !== fReqLen) {
+        setFastFatherPhoneError(`Father's phone number must be exactly ${fReqLen} digits for ${fastFatherPhonePrefix}`);
+        hasError = true;
+      }
+    }
+
+    if (hasError) {
+      return;
+    }
+
+    const calculatedPhone = `${fastPhonePrefix} ${fastPhone}`;
+    const calculatedFatherPhone = `${fastFatherPhonePrefix} ${fastFatherPhone}`;
+
+    // Assemble dynamic full address string
+    const streetPart = fastAddressStreet.trim() ? `${fastAddressStreet.trim()}, ` : '';
+    const assembledAddress = `${streetPart}${fastAddressPostOffice}, ${fastAddressDistrict}, ${fastAddressState}, ${fastAddressCountry} - ${fastAddressPin}`;
+
     const req = handleCreateRegistrationRequest(
       fastName, 
       fastEmail, 
-      fastPhone, 
+      calculatedPhone, 
       fastInstructorId,
       fastFatherName,
-      fastFatherPhone,
-      fastAddress,
-      fastLastQualification
+      calculatedFatherPhone,
+      assembledAddress,
+      fastLastQualification,
+      fastGender,
+      fastDob,
+      fastAvatarUrl
     );
     setFastRegSuccess(req);
+    
+    // Reset form states
     setFastName('');
     setFastEmail('');
     setFastPhone('');
+    setFastPhonePrefix('+91');
+    setFastPhoneError('');
     setFastInstructorId('');
     setFastFatherName('');
     setFastFatherPhone('');
-    setFastAddress('');
+    setFastFatherPhonePrefix('+91');
+    setFastFatherPhoneError('');
+    
+    setFastAddressCountry('India');
+    setFastAddressState('');
+    setFastAddressDistrict('');
+    setFastAddressPin('');
+    setFastAddressPostOffice('');
+    setFastAddressStreet('');
+    setFastAddressError('');
+
     setFastLastQualification('');
+    setFastGender('');
+    setFastDob('');
+    setFastAvatarUrl('');
+    setFastAvatarError('');
   };
 
   const handleCredentialsLogin = (e: React.FormEvent) => {
@@ -1004,9 +1333,81 @@ function AppContent() {
                         </button>
                       </motion.div>
                     ) : (
-                      <form onSubmit={handleFastStudentSubmit} className="space-y-4">
+                      <form onSubmit={handleFastStudentSubmit} className="space-y-4" noValidate>
+                        {/* Profile Photo Upload */}
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Profile Photo (Maximum 150KB) *</label>
+                          <div className="flex flex-col sm:flex-row items-center gap-4 p-4 bg-slate-50 dark:bg-[#070708] rounded-xl border border-dashed border-slate-200 dark:border-white/5">
+                            {fastAvatarUrl ? (
+                              <div className="relative group/avatar">
+                                <img 
+                                  src={fastAvatarUrl} 
+                                  alt="Preview" 
+                                  className="w-14 h-14 rounded-full object-cover border-2 border-amber-500 shadow-sm"
+                                  referrerPolicy="no-referrer"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setFastAvatarUrl('');
+                                    setFastAvatarError('');
+                                  }}
+                                  className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-1 hover:bg-rose-600 transition shadow cursor-pointer"
+                                  title="Remove Photo"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-600">
+                                <Camera className="w-5 h-5" />
+                              </div>
+                            )}
+                            <div className="flex-1 space-y-1 text-center sm:text-left">
+                              <input
+                                type="file"
+                                id="fast-student-avatar-upload"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  const limit = 150 * 1024;
+                                  if (file.size > limit) {
+                                    setFastAvatarError("photo size more then 150kb please upload photo under 150kb");
+                                    setFastAvatarUrl('');
+                                    e.target.value = '';
+                                    return;
+                                  }
+                                  setFastAvatarError('');
+                                  const reader = new FileReader();
+                                  reader.onloadend = () => {
+                                    setFastAvatarUrl(reader.result as string);
+                                  };
+                                  reader.readAsDataURL(file);
+                                }}
+                                className="hidden"
+                              />
+                              <label
+                                htmlFor="fast-student-avatar-upload"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 text-[10.5px] font-bold rounded-lg border border-amber-500/20 transition cursor-pointer"
+                              >
+                                <Upload className="w-3 h-3" />
+                                {fastAvatarUrl ? 'Change Photo' : 'Upload Photo'}
+                              </label>
+                              <p className="text-[9.5px] text-slate-400 dark:text-gray-500 leading-none">
+                                Supports JPEG, PNG, WebP. Maximum size 150KB.
+                              </p>
+                              {fastAvatarError && (
+                                <p className="text-[10.5px] text-rose-500 dark:text-rose-400 font-bold leading-tight mt-1">
+                                  {fastAvatarError}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
                         <div className="space-y-1.5">
-                          <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Full Legal Name</label>
+                          <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Full Legal Name *</label>
                           <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                               <User className="h-4 w-4 text-slate-400 dark:text-gray-500" />
@@ -1016,15 +1417,21 @@ function AppContent() {
                               required
                               placeholder="e.g. Samuel Wilson"
                               value={fastName}
-                              onChange={e => setFastName(e.target.value)}
-                              className="w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-850 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-sans"
+                              onChange={e => {
+                                setFastName(e.target.value);
+                                if (e.target.value.trim()) setFastNameError('');
+                              }}
+                              className={`w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border ${fastNameError ? 'border-rose-500' : 'border-slate-200 dark:border-white/5'} focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-850 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-sans`}
                             />
                           </div>
+                          {fastNameError && (
+                            <p className="text-[10px] text-rose-500 mt-1 font-semibold">{fastNameError}</p>
+                          )}
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div className="space-y-1.5">
-                            <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Email Address</label>
+                            <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Email Address *</label>
                             <div className="relative">
                               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                                 <Mail className="h-4 w-4 text-slate-400 dark:text-gray-500" />
@@ -1034,32 +1441,114 @@ function AppContent() {
                                 required
                                 placeholder="sam@example.com"
                                 value={fastEmail}
-                                onChange={e => setFastEmail(e.target.value)}
-                                className="w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-sans"
+                                onChange={e => {
+                                  setFastEmail(e.target.value);
+                                  if (e.target.value.trim()) setFastEmailError('');
+                                }}
+                                className={`w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border ${fastEmailError ? 'border-rose-500' : 'border-slate-200 dark:border-white/5'} focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-sans`}
                               />
                             </div>
+                            {fastEmailError && (
+                              <p className="text-[10px] text-rose-500 mt-1 font-semibold">{fastEmailError}</p>
+                            )}
                           </div>
 
                           <div className="space-y-1.5">
-                            <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Phone Number (Optional)</label>
-                            <div className="relative">
-                              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                                <Smartphone className="h-4 w-4 text-slate-400 dark:text-gray-500" />
+                            <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Phone Number *</label>
+                            <div className="flex gap-2">
+                              <select
+                                value={fastPhonePrefix}
+                                onChange={e => {
+                                  setFastPhonePrefix(e.target.value);
+                                  setFastPhone('');
+                                  setFastPhoneError('');
+                                }}
+                                className="px-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-855 dark:text-gray-100 font-sans"
+                              >
+                                {COUNTRY_PHONE_CONFIGS.map(c => (
+                                  <option key={`${c.name}-${c.code}`} value={c.code}>{c.flag} {c.code}</option>
+                                ))}
+                              </select>
+                              <div className="relative flex-1">
+                                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                  <Smartphone className="h-4 w-4 text-slate-400 dark:text-gray-500" />
+                                </div>
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder={COUNTRY_PHONE_CONFIGS.find(c => c.code === fastPhonePrefix)?.placeholder || '9876543210'}
+                                  value={fastPhone}
+                                  maxLength={COUNTRY_PHONE_CONFIGS.find(c => c.code === fastPhonePrefix)?.length || 10}
+                                  onChange={e => {
+                                    const raw = e.target.value.replace(/\D/g, '');
+                                    setFastPhone(raw);
+                                    const len = COUNTRY_PHONE_CONFIGS.find(c => c.code === fastPhonePrefix)?.length || 10;
+                                    if (!raw) {
+                                      setFastPhoneError('Phone number is required');
+                                    } else if (raw.length !== len) {
+                                      setFastPhoneError(`Must be exactly ${len} digits`);
+                                    } else {
+                                      setFastPhoneError('');
+                                    }
+                                  }}
+                                  className={`w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border ${fastPhoneError ? 'border-rose-500' : 'border-slate-200 dark:border-white/5'} focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-mono`}
+                                />
                               </div>
-                              <input
-                                type="text"
-                                placeholder="+1 (555) 0192"
-                                value={fastPhone}
-                                onChange={e => setFastPhone(e.target.value)}
-                                className="w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-sans"
-                              />
                             </div>
+                            {fastPhoneError && (
+                              <p className="text-[10px] text-rose-500 mt-1 font-semibold">{fastPhoneError}</p>
+                            )}
                           </div>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div className="space-y-1.5">
-                            <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Father's Name</label>
+                            <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Gender *</label>
+                            <div className="relative">
+                              <select
+                                required
+                                value={fastGender}
+                                onChange={e => {
+                                  setFastGender(e.target.value);
+                                  if (e.target.value) setFastGenderError('');
+                                }}
+                                className={`w-full px-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border ${fastGenderError ? 'border-rose-500' : 'border-slate-200 dark:border-white/5'} focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-855 dark:text-gray-100 transition-all font-sans`}
+                              >
+                                <option value="" disabled>Select Gender</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Non-Binary">Non-Binary</option>
+                                <option value="Prefer not to say">Prefer not to say</option>
+                              </select>
+                            </div>
+                            {fastGenderError && (
+                              <p className="text-[10px] text-rose-500 mt-1 font-semibold">{fastGenderError}</p>
+                            )}
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Date of Birth *</label>
+                            <div className="relative">
+                              <input
+                                type="date"
+                                required
+                                value={fastDob}
+                                onChange={e => {
+                                  setFastDob(e.target.value);
+                                  if (e.target.value) setFastDobError('');
+                                }}
+                                className={`w-full px-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border ${fastDobError ? 'border-rose-500' : 'border-slate-200 dark:border-white/5'} focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-855 dark:text-gray-100 transition-all font-sans select-none`}
+                              />
+                            </div>
+                            {fastDobError && (
+                              <p className="text-[10px] text-rose-500 mt-1 font-semibold">{fastDobError}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Father's Name *</label>
                             <div className="relative">
                               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                                 <User className="h-4 w-4 text-slate-400 dark:text-gray-500" />
@@ -1069,49 +1558,304 @@ function AppContent() {
                                 required
                                 placeholder="e.g. Arthur Wilson"
                                 value={fastFatherName}
-                                onChange={e => setFastFatherName(e.target.value)}
-                                className="w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-sans"
+                                onChange={e => {
+                                  setFastFatherName(e.target.value);
+                                  if (e.target.value.trim()) setFastFatherNameError('');
+                                }}
+                                className={`w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border ${fastFatherNameError ? 'border-rose-500' : 'border-slate-200 dark:border-white/5'} focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-sans`}
                               />
                             </div>
+                            {fastFatherNameError && (
+                              <p className="text-[10px] text-rose-500 mt-1 font-semibold">{fastFatherNameError}</p>
+                            )}
                           </div>
 
                           <div className="space-y-1.5">
-                            <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Father's Phone Number</label>
-                            <div className="relative">
-                              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                                <Smartphone className="h-4 w-4 text-slate-400 dark:text-gray-500" />
+                            <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Father's Phone Number *</label>
+                            <div className="flex gap-2">
+                              <select
+                                value={fastFatherPhonePrefix}
+                                onChange={e => {
+                                  setFastFatherPhonePrefix(e.target.value);
+                                  setFastFatherPhone('');
+                                  setFastFatherPhoneError('');
+                                }}
+                                className="px-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-855 dark:text-gray-100 font-sans"
+                              >
+                                {COUNTRY_PHONE_CONFIGS.map(c => (
+                                  <option key={`${c.name}-${c.code}`} value={c.code}>{c.flag} {c.code}</option>
+                                ))}
+                              </select>
+                              <div className="relative flex-1">
+                                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                  <Smartphone className="h-4 w-4 text-slate-400 dark:text-gray-500" />
+                                </div>
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder={COUNTRY_PHONE_CONFIGS.find(c => c.code === fastFatherPhonePrefix)?.placeholder || '9876543210'}
+                                  value={fastFatherPhone}
+                                  maxLength={COUNTRY_PHONE_CONFIGS.find(c => c.code === fastFatherPhonePrefix)?.length || 10}
+                                  onChange={e => {
+                                    const raw = e.target.value.replace(/\D/g, '');
+                                    setFastFatherPhone(raw);
+                                    const len = COUNTRY_PHONE_CONFIGS.find(c => c.code === fastFatherPhonePrefix)?.length || 10;
+                                    if (!raw) {
+                                      setFastFatherPhoneError("Father's phone number is required");
+                                    } else if (raw.length !== len) {
+                                      setFastFatherPhoneError(`Must be exactly ${len} digits`);
+                                    } else {
+                                      setFastFatherPhoneError('');
+                                    }
+                                  }}
+                                  className={`w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border ${fastFatherPhoneError ? 'border-rose-500' : 'border-slate-200 dark:border-white/5'} focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-650 transition-all font-mono`}
+                                />
+                              </div>
+                            </div>
+                            {fastFatherPhoneError && (
+                              <p className="text-[10px] text-rose-500 mt-1 font-semibold">{fastFatherPhoneError}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Residential Address Geographic Chain Select */}
+                        <div className="space-y-3 p-4 bg-slate-50 dark:bg-[#060607] rounded-xl border border-slate-200 dark:border-white/5">
+                          <div>
+                            <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Residential Address *</label>
+                            <p className="text-[9px] text-slate-400 dark:text-gray-500">Pick Country → State → District → enter ZIP → select/enter Post Office</p>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {/* Country Select */}
+                            <div className="space-y-1">
+                              <label className="text-[9.5px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold">Country *</label>
+                              <select
+                                required
+                                value={fastAddressCountry}
+                                onChange={e => {
+                                  const countryName = e.target.value;
+                                  setFastAddressCountry(countryName);
+                                  const c = GEO_COUNTRIES.find(item => item.name === countryName);
+                                  let nextState = '';
+                                  let nextDistrict = '';
+                                  if (c && c.states.length > 0) {
+                                    nextState = c.states[0].name;
+                                    nextDistrict = c.states[0].districts.length > 0 ? c.states[0].districts[0] : '';
+                                  }
+                                  setFastAddressState(nextState);
+                                  setFastAddressDistrict(nextDistrict);
+                                  
+                                  const fallback = getFallbackAddressInfo(countryName, nextState, nextDistrict);
+                                  setFastAddressPin(fallback.pin);
+                                  setFastAddressPostOffice(fallback.postOffice);
+                                }}
+                                className="w-full px-3 py-2 text-xs bg-white dark:bg-[#121214] rounded-lg border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-855 dark:text-gray-100 font-sans"
+                              >
+                                {GEO_COUNTRIES.map(c => (
+                                  <option key={c.name} value={c.name}>{c.flag} {c.name}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* State Select/Input */}
+                            <div className="space-y-1">
+                              <label className="text-[9.5px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold">State / Province *</label>
+                              {(() => {
+                                const activeCountry = GEO_COUNTRIES.find(c => c.name === fastAddressCountry);
+                                if (activeCountry && activeCountry.states.length > 0) {
+                                  return (
+                                    <select
+                                      required
+                                      value={fastAddressState}
+                                      onChange={e => {
+                                        const stateName = e.target.value;
+                                        setFastAddressState(stateName);
+                                        const st = activeCountry?.states.find(item => item.name === stateName);
+                                        let nextDistrict = '';
+                                        if (st && st.districts && st.districts.length > 0) {
+                                          nextDistrict = st.districts[0];
+                                        }
+                                        setFastAddressDistrict(nextDistrict);
+                                        
+                                        const fallback = getFallbackAddressInfo(fastAddressCountry, stateName, nextDistrict);
+                                        setFastAddressPin(fallback.pin);
+                                        setFastAddressPostOffice(fallback.postOffice);
+                                      }}
+                                      className="w-full px-3 py-2 text-xs bg-white dark:bg-[#121214] rounded-lg border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-855 dark:text-gray-100 font-sans"
+                                    >
+                                      <option value="" disabled>Select State</option>
+                                      {activeCountry.states.map(s => (
+                                        <option key={s.name} value={s.name}>{s.name}</option>
+                                      ))}
+                                    </select>
+                                  );
+                                } else {
+                                  return (
+                                    <input
+                                      type="text"
+                                      required
+                                      placeholder="Type State/Province"
+                                      value={fastAddressState}
+                                      onChange={e => {
+                                        const stateVal = e.target.value;
+                                        setFastAddressState(stateVal);
+                                        setFastAddressDistrict('');
+                                        const fallback = getFallbackAddressInfo(fastAddressCountry, stateVal, '');
+                                        setFastAddressPin(fallback.pin);
+                                        setFastAddressPostOffice(fallback.postOffice);
+                                      }}
+                                      className="w-full px-3 py-2 text-xs bg-white dark:bg-[#121214] rounded-lg border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-855 dark:text-gray-100 font-sans"
+                                    />
+                                  );
+                                }
+                              })()}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {/* District Select/Input */}
+                            <div className="space-y-1">
+                              <label className="text-[9.5px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold">District / County *</label>
+                              {(() => {
+                                const activeCountry = GEO_COUNTRIES.find(c => c.name === fastAddressCountry);
+                                const activeState = activeCountry?.states.find(s => s.name === fastAddressState);
+                                const districts = activeState ? activeState.districts : [];
+                                if (districts.length > 0) {
+                                  return (
+                                    <select
+                                      required
+                                      value={fastAddressDistrict}
+                                      onChange={e => {
+                                        const distVal = e.target.value;
+                                        setFastAddressDistrict(distVal);
+                                        const fallback = getFallbackAddressInfo(fastAddressCountry, fastAddressState, distVal);
+                                        setFastAddressPin(fallback.pin);
+                                        setFastAddressPostOffice(fallback.postOffice);
+                                      }}
+                                      className="w-full px-3 py-2 text-xs bg-white dark:bg-[#121214] rounded-lg border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-855 dark:text-gray-100 font-sans"
+                                    >
+                                      <option value="" disabled>Select District</option>
+                                      {districts.map(d => (
+                                        <option key={d} value={d}>{d}</option>
+                                      ))}
+                                    </select>
+                                  );
+                                } else {
+                                  return (
+                                    <input
+                                      type="text"
+                                      required
+                                      placeholder="Type District/County"
+                                      value={fastAddressDistrict}
+                                      onChange={e => {
+                                        const distVal = e.target.value;
+                                        setFastAddressDistrict(distVal);
+                                        const fallback = getFallbackAddressInfo(fastAddressCountry, fastAddressState, distVal);
+                                        setFastAddressPin(fallback.pin);
+                                        setFastAddressPostOffice(fallback.postOffice);
+                                      }}
+                                      className="w-full px-3 py-2 text-xs bg-white dark:bg-[#121214] rounded-lg border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-855 dark:text-gray-100 font-sans"
+                                    />
+                                  );
+                                }
+                              })()}
+                            </div>
+
+                            {/* PIN Code / ZIP Input */}
+                            <div className="space-y-1">
+                              <div className="flex justify-between items-center">
+                                <label className="text-[9.5px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold">PIN / ZIP Code *</label>
+                                {apiLoading && (
+                                  <span className="text-[9px] font-semibold text-amber-500 animate-pulse flex items-center gap-1">
+                                    <span className="inline-block h-2 w-2 rounded-full bg-amber-500 animate-ping" />
+                                    Live query...
+                                  </span>
+                                )}
+                                {!apiLoading && apiSuccessMsg && (
+                                  <span className="text-[8.5px] font-mono font-bold text-emerald-500 dark:text-emerald-400">
+                                    ✓ Verified Live
+                                  </span>
+                                )}
                               </div>
                               <input
                                 type="text"
                                 required
-                                placeholder="e.g. +1 (555) 0145"
-                                value={fastFatherPhone}
-                                onChange={e => setFastFatherPhone(e.target.value)}
-                                className="w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-sans"
+                                placeholder="Type PIN, e.g. 700091"
+                                value={fastAddressPin}
+                                onChange={e => {
+                                  const pinVal = e.target.value;
+                                  setFastAddressPin(pinVal);
+                                  const matches = getSmartPostOffices(fastAddressCountry, fastAddressState, fastAddressDistrict, pinVal);
+                                  if (matches.length > 0) {
+                                    setFastAddressPostOffice(matches[0]);
+                                  } else {
+                                    setFastAddressPostOffice('');
+                                  }
+                                }}
+                                className="w-full px-3 py-2 text-xs bg-white dark:bg-[#121214] rounded-lg border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-855 dark:text-gray-100 font-sans"
+                              />
+                              {apiSuccessMsg && (
+                                <p className="text-[9.5px] text-emerald-600 dark:text-emerald-400 font-semibold leading-tight">{apiSuccessMsg}</p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {/* Post Office Select / Input */}
+                            <div className="space-y-1">
+                              <label className="text-[9.5px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold">Post Office *</label>
+                              {(() => {
+                                const options = apiPostOffices.length > 0 ? apiPostOffices : getSmartPostOffices(fastAddressCountry, fastAddressState, fastAddressDistrict, fastAddressPin);
+                                if (options.length > 0) {
+                                  return (
+                                    <select
+                                      required
+                                      value={fastAddressPostOffice}
+                                      onChange={e => setFastAddressPostOffice(e.target.value)}
+                                      className="w-full px-3 py-2 text-xs bg-white dark:bg-[#121214] rounded-lg border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-855 dark:text-gray-100 font-sans"
+                                    >
+                                      <option value="" disabled>Choose Post Office</option>
+                                      {options.map(po => (
+                                        <option key={po} value={po}>{po}</option>
+                                      ))}
+                                    </select>
+                                  );
+                                } else {
+                                  return (
+                                    <input
+                                      type="text"
+                                      required
+                                      placeholder="Type Post Office Name"
+                                      value={fastAddressPostOffice}
+                                      onChange={e => setFastAddressPostOffice(e.target.value)}
+                                      className="w-full px-3 py-2 text-xs bg-white dark:bg-[#121214] rounded-lg border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-855 dark:text-gray-100 font-sans"
+                                    />
+                                  );
+                                }
+                              })()}
+                            </div>
+
+                            {/* Street Input */}
+                            <div className="space-y-1">
+                              <label className="text-[9.5px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold">Apartment / House / Street *</label>
+                              <input
+                                type="text"
+                                required
+                                placeholder="e.g. 15B Sector-C, Salt Lake"
+                                value={fastAddressStreet}
+                                onChange={e => setFastAddressStreet(e.target.value)}
+                                className="w-full px-3 py-2 text-xs bg-white dark:bg-[#121214] rounded-lg border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-855 dark:text-gray-100 font-sans"
                               />
                             </div>
                           </div>
+
+                          {fastAddressError && (
+                            <p className="text-[10px] text-rose-500 mt-1 font-bold">{fastAddressError}</p>
+                          )}
                         </div>
 
                         <div className="space-y-1.5">
-                          <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Residential Address</label>
-                          <div className="relative">
-                            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                              <MapPin className="h-4 w-4 text-slate-400 dark:text-gray-500" />
-                            </div>
-                            <input
-                              type="text"
-                              required
-                              placeholder="e.g. 742 Evergreen Terrace, Springfield"
-                              value={fastAddress}
-                              onChange={e => setFastAddress(e.target.value)}
-                              className="w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-850 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-sans"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Last Qualification</label>
+                          <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Last Qualification *</label>
                           <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                               <GraduationCap className="h-4 w-4 text-slate-400 dark:text-gray-500" />
@@ -1121,10 +1865,16 @@ function AppContent() {
                               required
                               placeholder="e.g. High School Diploma (Grade 12) / AP Classes"
                               value={fastLastQualification}
-                              onChange={e => setFastLastQualification(e.target.value)}
-                              className="w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-850 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-sans"
+                              onChange={e => {
+                                setFastLastQualification(e.target.value);
+                                if (e.target.value.trim()) setFastLastQualificationError('');
+                              }}
+                              className={`w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border ${fastLastQualificationError ? 'border-rose-500' : 'border-slate-200 dark:border-white/5'} focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-850 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-sans`}
                             />
                           </div>
+                          {fastLastQualificationError && (
+                            <p className="text-[10px] text-rose-500 mt-1 font-semibold">{fastLastQualificationError}</p>
+                          )}
                         </div>
 
                         <button

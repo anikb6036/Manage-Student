@@ -5,8 +5,9 @@
 
 import React, { useState } from 'react';
 import { UserAccount, ClassSchedule, RegistrationRequest } from '../types';
-import { UserPlus, Search, User, Filter, Trash2, Mail, Phone, Calendar, ArrowRight, BookOpen, Check, X, ShieldAlert, MapPin, GraduationCap } from 'lucide-react';
+import { UserPlus, Search, User, Filter, Trash2, Mail, Phone, Calendar, ArrowRight, BookOpen, Check, X, ShieldAlert, MapPin, GraduationCap, Camera, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { COUNTRY_PHONE_CONFIGS } from '../countryPhoneData';
 
 interface EnrollmentManagerProps {
   currentUser: UserAccount;
@@ -66,6 +67,16 @@ export default function EnrollmentManager({
   const [newFatherPhone, setNewFatherPhone] = useState('');
   const [newAddress, setNewAddress] = useState('');
   const [newLastQualification, setNewLastQualification] = useState('');
+  const [newGender, setNewGender] = useState('');
+  const [newDob, setNewDob] = useState('');
+  const [newAvatarUrl, setNewAvatarUrl] = useState('');
+  const [newAvatarError, setNewAvatarError] = useState('');
+
+  // Phone country verification states
+  const [newPhonePrefix, setNewPhonePrefix] = useState('+91');
+  const [newPhoneError, setNewPhoneError] = useState('');
+  const [newFatherPhonePrefix, setNewFatherPhonePrefix] = useState('+91');
+  const [newFatherPhoneError, setNewFatherPhoneError] = useState('');
 
   // New Instructor state
   const [newSpecialization, setNewSpecialization] = useState('');
@@ -77,17 +88,44 @@ export default function EnrollmentManager({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate main phone number length if input is present
+    if (newPhone) {
+      const config = COUNTRY_PHONE_CONFIGS.find(c => c.code === newPhonePrefix);
+      const reqLen = config ? config.length : 10;
+      if (newPhone.length !== reqLen) {
+        setNewPhoneError(`Phone number must be exactly ${reqLen} digits for ${newPhonePrefix}`);
+        return;
+      }
+    }
+    setNewPhoneError('');
+
+    // Validate father's phone number length if student form has input present
+    if (addFormType === 'student' && newFatherPhone) {
+      const config = COUNTRY_PHONE_CONFIGS.find(c => c.code === newFatherPhonePrefix);
+      const reqLen = config ? config.length : 10;
+      if (newFatherPhone.length !== reqLen) {
+        setNewFatherPhoneError(`Father's phone number must be exactly ${reqLen} digits for ${newFatherPhonePrefix}`);
+        return;
+      }
+    }
+    setNewFatherPhoneError('');
+
+    const formattedPhone = newPhone ? `${newPhonePrefix} ${newPhone}` : undefined;
+    const formattedFatherPhone = newFatherPhone ? `${newFatherPhonePrefix} ${newFatherPhone}` : undefined;
+
     if (addFormType === 'instructor' && ['admin', 'sub-admin'].includes(currentUser.role)) {
       if (!newName || !newEmail || !newInstructorUsername || !newInstructorPassword) return;
       if (onAddInstructor) {
         onAddInstructor({
           name: newName,
           email: newEmail,
-          phone: newPhone || undefined,
+          phone: formattedPhone,
           role: 'instructor',
           specialization: newSpecialization || undefined,
           username: newInstructorUsername,
-          password: newInstructorPassword
+          password: newInstructorPassword,
+          avatarUrl: newAvatarUrl || undefined
         });
       }
 
@@ -95,9 +133,13 @@ export default function EnrollmentManager({
       setNewName('');
       setNewEmail('');
       setNewPhone('');
+      setNewPhonePrefix('+91');
+      setNewPhoneError('');
       setNewSpecialization('');
       setNewInstructorUsername('');
       setNewInstructorPassword('');
+      setNewAvatarUrl('');
+      setNewAvatarError('');
       setShowAddForm(false);
     } else if (addFormType === 'sub-admin' && ['admin', 'sub-admin'].includes(currentUser.role)) {
       if (!newName || !newEmail || !newInstructorUsername || !newInstructorPassword) return;
@@ -105,10 +147,11 @@ export default function EnrollmentManager({
         onAddSubAdmin({
           name: newName,
           email: newEmail,
-          phone: newPhone || undefined,
+          phone: formattedPhone,
           role: 'sub-admin',
           username: newInstructorUsername,
-          password: newInstructorPassword
+          password: newInstructorPassword,
+          avatarUrl: newAvatarUrl || undefined
         });
       }
 
@@ -116,32 +159,47 @@ export default function EnrollmentManager({
       setNewName('');
       setNewEmail('');
       setNewPhone('');
+      setNewPhonePrefix('+91');
+      setNewPhoneError('');
       setNewInstructorUsername('');
       setNewInstructorPassword('');
+      setNewAvatarUrl('');
+      setNewAvatarError('');
       setShowAddForm(false);
     } else {
       if (!newName || !newEmail) return;
       onAddStudent({
         name: newName,
         email: newEmail,
-        phone: newPhone || undefined,
+        phone: formattedPhone,
         role: 'student',
         assignedInstructorId: newInstructorId || undefined,
         fatherName: newFatherName || undefined,
-        fatherPhone: newFatherPhone || undefined,
+        fatherPhone: formattedFatherPhone,
         address: newAddress || undefined,
-        lastQualification: newLastQualification || undefined
+        lastQualification: newLastQualification || undefined,
+        gender: newGender || undefined,
+        dob: newDob || undefined,
+        avatarUrl: newAvatarUrl || undefined
       });
 
       // Reset Form
       setNewName('');
       setNewEmail('');
       setNewPhone('');
+      setNewPhonePrefix('+91');
+      setNewPhoneError('');
       setNewInstructorId('');
       setNewFatherName('');
       setNewFatherPhone('');
+      setNewFatherPhonePrefix('+91');
+      setNewFatherPhoneError('');
       setNewAddress('');
       setNewLastQualification('');
+      setNewGender('');
+      setNewDob('');
+      setNewAvatarUrl('');
+      setNewAvatarError('');
       setShowAddForm(false);
     }
   };
@@ -231,13 +289,27 @@ export default function EnrollmentManager({
                   className="p-4 rounded-2xl bg-white dark:bg-[#0F0F11] border border-slate-150/80 dark:border-white/5 flex flex-col justify-between gap-3 shadow-xs"
                 >
                   <div>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="text-sm font-bold text-slate-900 dark:text-gray-100 font-serif">{req.name}</p>
-                        <p className="text-[10px] text-slate-400 dark:text-gray-500 font-mono mt-0.5">Submitted: {req.submittedDate}</p>
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="flex items-center gap-3">
+                        {req.avatarUrl ? (
+                          <img 
+                            src={req.avatarUrl} 
+                            alt={req.name} 
+                            className="w-10 h-10 rounded-full object-cover border border-amber-500 shadow-sm flex-shrink-0"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-850 flex items-center justify-center text-slate-400 dark:text-slate-600 flex-shrink-0 font-bold">
+                            <User className="w-5 h-5" />
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-sm font-bold text-slate-900 dark:text-gray-100 font-serif leading-tight">{req.name}</p>
+                          <p className="text-[10px] text-slate-400 dark:text-gray-500 font-mono mt-0.5">Submitted: {req.submittedDate}</p>
+                        </div>
                       </div>
-                      <span className="text-[9px] font-mono font-bold tracking-wider text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full uppercase">
-                        PENDING APPROVAL
+                      <span className="text-[9px] font-mono font-bold tracking-wider text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full uppercase flex-shrink-0">
+                        PENDING
                       </span>
                     </div>
 
@@ -250,6 +322,18 @@ export default function EnrollmentManager({
                         <p className="flex items-center gap-2 bg-slate-50 dark:bg-[#161618] p-1.5 px-2 rounded-lg border dark:border-white/5">
                           <Phone className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
                           <span>{req.phone}</span>
+                        </p>
+                      )}
+                      {req.gender && (
+                        <p className="flex items-center gap-2 bg-slate-50 dark:bg-[#161618] p-1.5 px-2 rounded-lg border dark:border-white/5">
+                          <User className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                          <span>Gender: <strong className="text-slate-800 dark:text-gray-200">{req.gender}</strong></span>
+                        </p>
+                      )}
+                      {req.dob && (
+                        <p className="flex items-center gap-2 bg-slate-50 dark:bg-[#161618] p-1.5 px-2 rounded-lg border dark:border-white/5">
+                          <Calendar className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                          <span>Date of Birth: <strong className="text-slate-800 dark:text-gray-200">{req.dob}</strong></span>
                         </p>
                       )}
                       {req.fatherName && (
@@ -350,6 +434,80 @@ export default function EnrollmentManager({
                 onSubmit={handleSubmit}
                 className="p-5 rounded-2xl bg-slate-50 dark:bg-[#0F0F11] border border-slate-100 dark:border-white/5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end"
               >
+                {/* Manual Photo Upload Section */}
+                <div className="md:col-span-2 lg:col-span-4">
+                  <div className="space-y-1.5 max-w-xl">
+                    <label className="text-[11px] font-mono uppercase text-slate-500 dark:text-slate-400 block font-bold">Profile Photo (Maximum 150KB)</label>
+                    <div className="flex items-center gap-4 p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+                      {newAvatarUrl ? (
+                        <div className="relative">
+                          <img 
+                            src={newAvatarUrl} 
+                            alt="Preview" 
+                            className="w-12 h-12 rounded-full object-cover border-2 border-amber-500 shadow-xs"
+                            referrerPolicy="no-referrer"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewAvatarUrl('');
+                              setNewAvatarError('');
+                            }}
+                            className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-0.5 hover:bg-rose-600 transition shadow"
+                            title="Remove Photo"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="w-12 h-12 rounded-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-600">
+                          <Camera className="w-5 h-5" />
+                        </div>
+                      )}
+                      <div className="flex-1 space-y-1">
+                        <input
+                          type="file"
+                          id="manual-avatar-upload"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            const limit = 150 * 1024;
+                            if (file.size > limit) {
+                              setNewAvatarError("photo size more then 150kb please upload photo under 150kb");
+                              setNewAvatarUrl('');
+                              e.target.value = '';
+                              return;
+                            }
+                            setNewAvatarError('');
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setNewAvatarUrl(reader.result as string);
+                            };
+                            reader.readAsDataURL(file);
+                          }}
+                          className="hidden"
+                        />
+                        <label
+                          htmlFor="manual-avatar-upload"
+                          className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 px-2.5 py-1 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer text-slate-705 dark:text-slate-300 transition"
+                        >
+                          <Upload className="w-3 h-3" />
+                          {newAvatarUrl ? 'Change' : 'Select Photo'}
+                        </label>
+                        <p className="text-[10px] text-slate-400 dark:text-gray-500 font-medium">
+                          Strictly maximum file size 150KB.
+                        </p>
+                        {newAvatarError && (
+                          <p className="text-[10px] text-rose-500 font-bold">
+                            {newAvatarError}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {['admin', 'sub-admin'].includes(currentUser.role) && (
                   <div className="md:col-span-2 lg:col-span-4 mb-2 flex gap-1.5 p-1 bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-white/5 rounded-2xl w-full max-w-md">
                     <button
@@ -416,13 +574,41 @@ export default function EnrollmentManager({
 
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-mono uppercase text-slate-500 dark:text-slate-400 block font-bold">Phone (Optional)</label>
-                      <input
-                        type="text"
-                        placeholder="+1 (555) 7789"
-                        value={newPhone}
-                        onChange={e => setNewPhone(e.target.value)}
-                        className="w-full px-3 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
-                      />
+                      <div className="flex gap-1.5">
+                        <select
+                          value={newPhonePrefix}
+                          onChange={e => {
+                            setNewPhonePrefix(e.target.value);
+                            setNewPhone('');
+                            setNewPhoneError('');
+                          }}
+                          className="px-2 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-sans"
+                        >
+                          {COUNTRY_PHONE_CONFIGS.map(c => (
+                            <option key={`${c.name}-${c.code}`} value={c.code}>{c.flag} {c.code}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          placeholder={COUNTRY_PHONE_CONFIGS.find(c => c.code === newPhonePrefix)?.placeholder || '9876543210'}
+                          value={newPhone}
+                          maxLength={COUNTRY_PHONE_CONFIGS.find(c => c.code === newPhonePrefix)?.length || 10}
+                          onChange={e => {
+                            const raw = e.target.value.replace(/\D/g, '');
+                            setNewPhone(raw);
+                            const len = COUNTRY_PHONE_CONFIGS.find(c => c.code === newPhonePrefix)?.length || 10;
+                            if (raw && raw.length !== len) {
+                              setNewPhoneError(`Must be exactly ${len} digits`);
+                            } else {
+                              setNewPhoneError('');
+                            }
+                          }}
+                          className={`flex-1 px-3 py-2 text-xs border ${newPhoneError ? 'border-rose-500' : 'border-slate-200 dark:border-slate-800'} rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-mono`}
+                        />
+                      </div>
+                      {newPhoneError && (
+                        <p className="text-[10px] text-rose-500 font-semibold">{newPhoneError}</p>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
@@ -492,13 +678,41 @@ export default function EnrollmentManager({
 
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-mono uppercase text-slate-500 dark:text-slate-400 block font-bold">Phone (Optional)</label>
-                      <input
-                        type="text"
-                        placeholder="+1 (555) 7711"
-                        value={newPhone}
-                        onChange={e => setNewPhone(e.target.value)}
-                        className="w-full px-3 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
-                      />
+                      <div className="flex gap-1.5">
+                        <select
+                          value={newPhonePrefix}
+                          onChange={e => {
+                            setNewPhonePrefix(e.target.value);
+                            setNewPhone('');
+                            setNewPhoneError('');
+                          }}
+                          className="px-2 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-sans"
+                        >
+                          {COUNTRY_PHONE_CONFIGS.map(c => (
+                            <option key={`${c.name}-${c.code}`} value={c.code}>{c.flag} {c.code}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          placeholder={COUNTRY_PHONE_CONFIGS.find(c => c.code === newPhonePrefix)?.placeholder || '9876543210'}
+                          value={newPhone}
+                          maxLength={COUNTRY_PHONE_CONFIGS.find(c => c.code === newPhonePrefix)?.length || 10}
+                          onChange={e => {
+                            const raw = e.target.value.replace(/\D/g, '');
+                            setNewPhone(raw);
+                            const len = COUNTRY_PHONE_CONFIGS.find(c => c.code === newPhonePrefix)?.length || 10;
+                            if (raw && raw.length !== len) {
+                              setNewPhoneError(`Must be exactly ${len} digits`);
+                            } else {
+                              setNewPhoneError('');
+                            }
+                          }}
+                          className={`flex-1 px-3 py-2 text-xs border ${newPhoneError ? 'border-rose-500' : 'border-slate-200 dark:border-slate-800'} rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-mono`}
+                        />
+                      </div>
+                      {newPhoneError && (
+                        <p className="text-[10px] text-rose-500 font-semibold">{newPhoneError}</p>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
@@ -563,14 +777,42 @@ export default function EnrollmentManager({
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[11px] font-mono uppercase text-slate-500 dark:text-slate-400 block">Phone Number</label>
-                      <input
-                        type="text"
-                        placeholder="+1 (555) 1234"
-                        value={newPhone}
-                        onChange={e => setNewPhone(e.target.value)}
-                        className="w-full px-3 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
-                      />
+                      <label className="text-[11px] font-mono uppercase text-slate-500 dark:text-slate-400 block">Phone Number (Optional)</label>
+                      <div className="flex gap-1.5">
+                        <select
+                          value={newPhonePrefix}
+                          onChange={e => {
+                            setNewPhonePrefix(e.target.value);
+                            setNewPhone('');
+                            setNewPhoneError('');
+                          }}
+                          className="px-2 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-sans"
+                        >
+                          {COUNTRY_PHONE_CONFIGS.map(c => (
+                            <option key={`${c.name}-${c.code}`} value={c.code}>{c.flag} {c.code}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          placeholder={COUNTRY_PHONE_CONFIGS.find(c => c.code === newPhonePrefix)?.placeholder || '9876543210'}
+                          value={newPhone}
+                          maxLength={COUNTRY_PHONE_CONFIGS.find(c => c.code === newPhonePrefix)?.length || 10}
+                          onChange={e => {
+                            const raw = e.target.value.replace(/\D/g, '');
+                            setNewPhone(raw);
+                            const len = COUNTRY_PHONE_CONFIGS.find(c => c.code === newPhonePrefix)?.length || 10;
+                            if (raw && raw.length !== len) {
+                              setNewPhoneError(`Must be exactly ${len} digits`);
+                            } else {
+                              setNewPhoneError('');
+                            }
+                          }}
+                          className={`flex-1 px-3 py-2 text-xs border ${newPhoneError ? 'border-rose-500' : 'border-slate-200 dark:border-slate-800'} rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-mono`}
+                        />
+                      </div>
+                      {newPhoneError && (
+                        <p className="text-[10px] text-rose-500 font-semibold">{newPhoneError}</p>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
@@ -590,6 +832,31 @@ export default function EnrollmentManager({
                     </div>
 
                     <div className="space-y-1.5">
+                      <label className="text-[11px] font-mono uppercase text-slate-500 dark:text-slate-400 block">Gender</label>
+                      <select
+                        value={newGender}
+                        onChange={e => setNewGender(e.target.value)}
+                        className="w-full px-3 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                      >
+                        <option value="">Select Gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Non-Binary">Non-Binary</option>
+                        <option value="Prefer not to say">Prefer not to say</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-mono uppercase text-slate-500 dark:text-slate-400 block">Date of Birth</label>
+                      <input
+                        type="date"
+                        value={newDob}
+                        onChange={e => setNewDob(e.target.value)}
+                        className="w-full px-3 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
                       <label className="text-[11px] font-mono uppercase text-slate-500 dark:text-slate-400 block">Father's Name (Optional)</label>
                       <input
                         type="text"
@@ -602,13 +869,41 @@ export default function EnrollmentManager({
 
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-mono uppercase text-slate-500 dark:text-slate-400 block">Father's Phone (Optional)</label>
-                      <input
-                        type="text"
-                        placeholder="Father's Phone Number"
-                        value={newFatherPhone}
-                        onChange={e => setNewFatherPhone(e.target.value)}
-                        className="w-full px-3 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
-                      />
+                      <div className="flex gap-1.5">
+                        <select
+                          value={newFatherPhonePrefix}
+                          onChange={e => {
+                            setNewFatherPhonePrefix(e.target.value);
+                            setNewFatherPhone('');
+                            setNewFatherPhoneError('');
+                          }}
+                          className="px-2 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-sans"
+                        >
+                          {COUNTRY_PHONE_CONFIGS.map(c => (
+                            <option key={`${c.name}-${c.code}`} value={c.code}>{c.flag} {c.code}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          placeholder={COUNTRY_PHONE_CONFIGS.find(c => c.code === newFatherPhonePrefix)?.placeholder || '9876543210'}
+                          value={newFatherPhone}
+                          maxLength={COUNTRY_PHONE_CONFIGS.find(c => c.code === newFatherPhonePrefix)?.length || 10}
+                          onChange={e => {
+                            const raw = e.target.value.replace(/\D/g, '');
+                            setNewFatherPhone(raw);
+                            const len = COUNTRY_PHONE_CONFIGS.find(c => c.code === newFatherPhonePrefix)?.length || 10;
+                            if (raw && raw.length !== len) {
+                              setNewFatherPhoneError(`Must be exactly ${len} digits`);
+                            } else {
+                              setNewFatherPhoneError('');
+                            }
+                          }}
+                          className={`flex-1 px-3 py-2 text-xs border ${newFatherPhoneError ? 'border-rose-500' : 'border-slate-200 dark:border-slate-800'} rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-mono`}
+                        />
+                      </div>
+                      {newFatherPhoneError && (
+                        <p className="text-[10px] text-rose-500 font-semibold">{newFatherPhoneError}</p>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
@@ -800,8 +1095,18 @@ export default function EnrollmentManager({
                                 <Calendar className="w-3 h-3 text-slate-41" /> Registered: {student.joinedDate}
                               </p>
 
-                              {(student.fatherName || student.address || student.lastQualification) && (
+                              {(student.fatherName || student.address || student.lastQualification || student.gender || student.dob) && (
                                 <div className="mt-2 pt-2 border-t border-slate-100 dark:border-white/5 space-y-1 text-[10.5px]">
+                                  {student.gender && (
+                                    <p className="text-slate-600 dark:text-gray-400">
+                                      <strong className="text-slate-500">Gender:</strong> {student.gender}
+                                    </p>
+                                  )}
+                                  {student.dob && (
+                                    <p className="text-slate-600 dark:text-gray-400">
+                                      <strong className="text-slate-500">D.O.B:</strong> {student.dob}
+                                    </p>
+                                  )}
                                   {student.fatherName && (
                                     <p className="text-slate-600 dark:text-gray-400" title={`Father's phone: ${student.fatherPhone || 'N/A'}`}>
                                       <strong className="text-slate-500">Father:</strong> {student.fatherName} {student.fatherPhone && `(${student.fatherPhone})`}

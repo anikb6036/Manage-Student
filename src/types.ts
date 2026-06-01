@@ -21,6 +21,8 @@ export interface UserAccount {
   fatherPhone?: string;
   address?: string;
   lastQualification?: string;
+  gender?: string;
+  dob?: string;
 }
 
 export interface RegistrationRequest {
@@ -37,6 +39,9 @@ export interface RegistrationRequest {
   fatherPhone?: string;
   address?: string;
   lastQualification?: string;
+  gender?: string;
+  dob?: string;
+  avatarUrl?: string;
 }
 
 export interface SimulatedEmail {
