@@ -95,7 +95,7 @@ coaching-center-management/
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/coaching-center-management.git
+git clone https://github.com/anikb6036/Manage-Student.git
 ```
 
 ### Navigate to Project Folder
@@ -152,22 +152,6 @@ http://localhost:3000
 - View attendance
 - Check fee status
 - Access course details
-
----
-
-## 📸 Screenshots
-
-### Dashboard
-![Dashboard Screenshot](screenshots/dashboard.png)
-
-### Student Management
-![Student Management](screenshots/students.png)
-
-### Attendance Module
-![Attendance](screenshots/attendance.png)
-
-### Fee Management
-![Fees](screenshots/fees.png)
 
 ---
 
