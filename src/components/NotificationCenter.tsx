@@ -54,7 +54,7 @@ export default function NotificationCenter({
     setIsSimulatingTrigger(true);
     setTimeout(() => {
       const newLog = {
-        id: `log-${Date.now()}`,
+        id: `log-${Date.now()}-${Math.floor(Math.random() * 1000000)}`,
         to: 'all-students-enrolled@coachingcenter.edu',
         subject: '📅 Automated Weekly Class Schedule Alert',
         body: 'This is an automated system email summary. All classes for the week of June 1st have been consolidated and synced with student dashboards.',

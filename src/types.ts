@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type UserRole = 'admin' | 'instructor' | 'student';
+export type UserRole = 'admin' | 'sub-admin' | 'instructor' | 'student';
 
 export interface UserAccount {
   id: string;
@@ -17,6 +17,10 @@ export interface UserAccount {
   assignedInstructorId?: string; // For students
   username?: string; // Optional username for credentials login
   password?: string; // Optional password for credentials login
+  fatherName?: string;
+  fatherPhone?: string;
+  address?: string;
+  lastQualification?: string;
 }
 
 export interface RegistrationRequest {
@@ -29,6 +33,10 @@ export interface RegistrationRequest {
   submittedDate: string;
   username: string; // Auto-generated username
   password: string; // Auto-generated password
+  fatherName?: string;
+  fatherPhone?: string;
+  address?: string;
+  lastQualification?: string;
 }
 
 export interface SimulatedEmail {

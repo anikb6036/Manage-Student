@@ -15,8 +15,8 @@ export const INITIAL_USERS: UserAccount[] = [
     avatarUrl: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=150',
     phone: '+1 (555) 0100',
     joinedDate: '2024-05-20',
-    username: 'anik_admin',
-    password: 'Password123'
+    username: 'anik',
+    password: 'anik'
   }
 ];
 
@@ -43,7 +43,22 @@ export function getSavedState<T>(key: string, defaultValue: T): T {
   try {
     const value = localStorage.getItem(key);
     if (value) {
-      return JSON.parse(value) as T;
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        const seen = new Set<string>();
+        const deduplicated = parsed.filter(item => {
+          if (item && typeof item === 'object' && 'id' in item) {
+            const itemWithId = item as { id: string };
+            if (seen.has(itemWithId.id)) {
+              return false;
+            }
+            seen.add(itemWithId.id);
+          }
+          return true;
+        });
+        return deduplicated as unknown as T;
+      }
+      return parsed as T;
     }
   } catch (err) {
     console.error(`Error loading state standard local storage for key ${key}`, err);

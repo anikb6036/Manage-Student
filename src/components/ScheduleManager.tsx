@@ -100,9 +100,14 @@ export default function ScheduleManager({
             </p>
           </div>
 
-          {currentUser.role === 'admin' && (
+          {['admin', 'sub-admin', 'instructor'].includes(currentUser.role) && (
             <button
-              onClick={() => setShowAddForm(!showAddForm)}
+              onClick={() => {
+                setShowAddForm(!showAddForm);
+                if (currentUser.role === 'instructor') {
+                  setInstructorId(currentUser.id);
+                }
+              }}
               className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-amber-950 rounded-xl shadow-md font-bold text-xs flex items-center gap-2 transition active:scale-95 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -157,7 +162,8 @@ export default function ScheduleManager({
                     value={instructorId}
                     onChange={e => setInstructorId(e.target.value)}
                     required
-                    className="w-full px-3 py-2 text-xs border border-slate-200 dark:border-white/5 rounded-xl bg-white dark:bg-[#0A0A0B] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                    disabled={currentUser.role === 'instructor'}
+                    className="w-full px-3 py-2 text-xs border border-slate-200 dark:border-white/5 rounded-xl bg-white dark:bg-[#0A0A0B] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 disabled:opacity-70 disabled:cursor-not-allowed"
                   >
                     <option value="">Select Instructor</option>
                     {instructors.map(ins => (
@@ -379,7 +385,7 @@ export default function ScheduleManager({
                     {cl.status === 'scheduled' && (
                       <>
                         {/* Administrator or Assigned Instructor controls */}
-                        {(currentUser.role === 'admin' || (currentUser.role === 'instructor' && currentUser.id === cl.instructorId)) ? (
+                        {((['admin', 'sub-admin'].includes(currentUser.role)) || (currentUser.role === 'instructor' && currentUser.id === cl.instructorId)) ? (
                           <div className="flex gap-2 w-full justify-end font-sans">
                             <button
                               onClick={() => onUpdateStatus(cl.id, 'completed')}

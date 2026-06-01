@@ -21,6 +21,7 @@ import ScheduleManager from './components/ScheduleManager';
 import ProgressTracker from './components/ProgressTracker';
 import ReportingDashboard from './components/ReportingDashboard';
 import CloudBackup from './components/CloudBackup';
+import MailboxManager from './components/MailboxManager';
 import {
   LayoutDashboard,
   Users,
@@ -38,13 +39,20 @@ import {
   Activity,
   ChevronRight,
   ShieldAlert,
+  Shield,
+  Key,
   Smartphone,
-  Check
+  Check,
+  Mail,
+  Lock,
+  Sparkles,
+  MapPin,
+  GraduationCap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 // Auto-detect and perform a one-time clean-up migration of old dummy/simulation storage data
-if (typeof window !== 'undefined' && !localStorage.getItem('db-migrated-to-real-v2')) {
+if (typeof window !== 'undefined' && !localStorage.getItem('db-migrated-to-real-v4')) {
   localStorage.removeItem('db-users');
   localStorage.removeItem('db-schedules');
   localStorage.removeItem('db-progress');
@@ -53,8 +61,12 @@ if (typeof window !== 'undefined' && !localStorage.getItem('db-migrated-to-real-
   localStorage.removeItem('db-registration-requests');
   localStorage.removeItem('db-simulated-emails');
   localStorage.removeItem('active-user');
-  localStorage.setItem('db-migrated-to-real-v2', 'true');
+  localStorage.setItem('db-migrated-to-real-v4', 'true');
 }
+
+const generateUniqueId = (prefix: string) => {
+  return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 100000000)}`;
+};
 
 function AppContent() {
   const { isDark, toggleTheme } = useTheme();
@@ -95,14 +107,18 @@ function AppContent() {
   });
 
   // Navigation tab state
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'enrollments' | 'schedule' | 'progress' | 'reports' | 'backup'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'enrollments' | 'schedule' | 'progress' | 'reports' | 'backup' | 'inbox'>('dashboard');
   
   // Onboarding screens and fast registration workflow states
-  const [onboardingTab, setOnboardingTab] = useState<'fastReg' | 'authLogin' | 'sandboxCreate'>('fastReg');
+  const [onboardingTab, setOnboardingTab] = useState<'fastReg' | 'authLogin' | 'adminLogin'>('authLogin');
   const [fastName, setFastName] = useState('');
   const [fastEmail, setFastEmail] = useState('');
   const [fastPhone, setFastPhone] = useState('');
   const [fastInstructorId, setFastInstructorId] = useState('');
+  const [fastFatherName, setFastFatherName] = useState('');
+  const [fastFatherPhone, setFastFatherPhone] = useState('');
+  const [fastAddress, setFastAddress] = useState('');
+  const [fastLastQualification, setFastLastQualification] = useState('');
   const [fastRegSuccess, setFastRegSuccess] = useState<RegistrationRequest | null>(null);
 
   const [loginUsername, setLoginUsername] = useState('');
@@ -114,11 +130,7 @@ function AppContent() {
   const [showMailbox, setShowMailbox] = useState(false);
   const [selectedMail, setSelectedMail] = useState<SimulatedEmail | null>(null);
 
-  // Registration forms state
-  const [regName, setRegName] = useState('');
-  const [regEmail, setRegEmail] = useState('');
-  const [regPhone, setRegPhone] = useState('');
-  const [regRole, setRegRole] = useState<'admin' | 'instructor' | 'student'>('student');
+
 
   // Push notifications toast overlay state
   const [toastAlert, setToastAlert] = useState<AppNotification | null>(null);
@@ -127,6 +139,16 @@ function AppContent() {
   useEffect(() => {
     saveState('active-user', currentUser);
   }, [currentUser]);
+
+  // If currently logged in user is removed/deleted from the database, invalidate session immediately
+  useEffect(() => {
+    if (currentUser && currentUser.id !== 'admin-1') {
+      const exists = users.some(u => u.id === currentUser.id);
+      if (!exists) {
+        setCurrentUser(null);
+      }
+    }
+  }, [users, currentUser]);
 
   useEffect(() => {
     saveState('db-users', users);
@@ -169,19 +191,63 @@ function AppContent() {
   const handleAddStudent = (studentData: Omit<UserAccount, 'id' | 'joinedDate'>) => {
     const newStudent: UserAccount = {
       ...studentData,
-      id: `student-${Date.now()}`,
+      id: generateUniqueId('student'),
       joinedDate: new Date().toLocaleDateString('en-US')
     };
     setUsers(prev => [...prev, newStudent]);
 
     // System Notification Action
     const notif: AppNotification = {
-      id: `notif-${Date.now()}`,
+      id: generateUniqueId('notif'),
       title: 'Student Account Registered',
       message: `Successful registration folder instantiated for ${newStudent.name}. Profile ready for academic classes scheduling.`,
       timestamp: new Date().toISOString(),
       read: false,
       type: 'enrollment',
+      channel: 'system'
+    };
+    setNotifications(prev => [notif, ...prev]);
+    triggerToast(notif);
+  };
+
+  const handleAddInstructor = (instructorData: Omit<UserAccount, 'id' | 'joinedDate'>) => {
+    const newInstructor: UserAccount = {
+      ...instructorData,
+      id: generateUniqueId('instructor'),
+      joinedDate: new Date().toLocaleDateString('en-US'),
+      role: 'instructor'
+    };
+    setUsers(prev => [...prev, newInstructor]);
+
+    const notif: AppNotification = {
+      id: generateUniqueId('notif'),
+      title: 'Instructor Account Created',
+      message: `New Instructor account configured for ${newInstructor.name} (${newInstructor.specialization || 'General'}). Credentialed access is active.`,
+      timestamp: new Date().toISOString(),
+      read: false,
+      type: 'general',
+      channel: 'system'
+    };
+    setNotifications(prev => [notif, ...prev]);
+    triggerToast(notif);
+  };
+
+  const handleAddSubAdmin = (subAdminData: Omit<UserAccount, 'id' | 'joinedDate'>) => {
+    const newSubAdmin: UserAccount = {
+      ...subAdminData,
+      id: generateUniqueId('subadmin'),
+      joinedDate: new Date().toLocaleDateString('en-US'),
+      role: 'sub-admin'
+    };
+    setUsers(prev => [...prev, newSubAdmin]);
+
+    const notif: AppNotification = {
+      id: generateUniqueId('notif'),
+      title: 'Sub-Admin Account Created',
+      message: `New Sub-Admin account configured for ${newSubAdmin.name}. Professional access is granted.`,
+      timestamp: new Date().toISOString(),
+      read: false,
+      type: 'general',
       channel: 'system'
     };
     setNotifications(prev => [notif, ...prev]);
@@ -195,6 +261,24 @@ function AppContent() {
       ...s,
       enrolledStudentIds: s.enrolledStudentIds.filter(id => id !== studentId)
     })));
+    if (currentUser && currentUser.id === studentId) {
+      setCurrentUser(null);
+    }
+  };
+
+  const handleRemoveInstructor = (instructorId: string) => {
+    setUsers(prev => prev.filter(u => u.id !== instructorId));
+    setSchedules(prev => prev.map(s => s.instructorId === instructorId ? { ...s, instructorId: '' } : s));
+    if (currentUser && currentUser.id === instructorId) {
+      setCurrentUser(null);
+    }
+  };
+
+  const handleRemoveSubAdmin = (subAdminId: string) => {
+    setUsers(prev => prev.filter(u => u.id !== subAdminId));
+    if (currentUser && currentUser.id === subAdminId) {
+      setCurrentUser(null);
+    }
   };
 
   const handleEnrollStudentInClass = (studentId: string, classId: string) => {
@@ -213,7 +297,7 @@ function AppContent() {
     }));
 
     const notif: AppNotification = {
-      id: `notif-${Date.now()}`,
+      id: generateUniqueId('notif'),
       title: 'Student Added to Class Roll',
       message: `${student.name} is now registered in session. Syllabus curriculum synchronized correctly.`,
       timestamp: new Date().toISOString(),
@@ -228,13 +312,13 @@ function AppContent() {
   const handleAddClass = (classData: Omit<ClassSchedule, 'id' | 'enrolledStudentIds'>) => {
     const newClass: ClassSchedule = {
       ...classData,
-      id: `class-${Date.now()}`,
+      id: generateUniqueId('class'),
       enrolledStudentIds: []
     };
     setSchedules(prev => [...prev, newClass]);
 
     const notif: AppNotification = {
-      id: `notif-${Date.now()}`,
+      id: generateUniqueId('notif'),
       title: 'Lesson Schedule Live',
       message: `"${newClass.title}" (${newClass.subject}) added to active syllabus by ${newClass.instructorName}. Reserve slots now.`,
       timestamp: new Date().toISOString(),
@@ -259,7 +343,7 @@ function AppContent() {
       const cls = schedules.find(c => c.id === classId);
       if (cls) {
         const notif: AppNotification = {
-          id: `notif-${Date.now()}`,
+          id: generateUniqueId('notif'),
           title: `Class Session ${status.toUpperCase()}`,
           message: `The session "${cls.title}" was updated to ${status}. All attendance indices saved.`,
           timestamp: new Date().toISOString(),
@@ -287,7 +371,7 @@ function AppContent() {
     }));
 
     const notif: AppNotification = {
-      id: `notif-${Date.now()}`,
+      id: generateUniqueId('notif'),
       title: 'Self-Enrollment Approved',
       message: `You successfully self-registered into the course session. Timetable logged!`,
       timestamp: new Date().toISOString(),
@@ -302,7 +386,7 @@ function AppContent() {
   const handleAddProgressRecord = (recordData: Omit<ProgressRecord, 'id' | 'evaluationDate' | 'instructorId' | 'instructorName'>) => {
     const newRecord: ProgressRecord = {
       ...recordData,
-      id: `progress-${Date.now()}`,
+      id: generateUniqueId('progress'),
       evaluationDate: new Date().toISOString().slice(0, 10),
       instructorId: currentUser?.id || 'admin-1',
       instructorName: currentUser?.name || 'Center Administrator'
@@ -311,7 +395,7 @@ function AppContent() {
 
     // Send push trigger immediately
     const notif: AppNotification = {
-      id: `notif-${Date.now()}`,
+      id: generateUniqueId('notif'),
       title: 'Academic Score Evaluated',
       message: `Evaluated score of ${newRecord.score}% added for ${newRecord.studentName} in "${newRecord.className}".`,
       timestamp: new Date().toISOString(),
@@ -326,7 +410,7 @@ function AppContent() {
   const handleTriggerBackup = () => {
     const timestamp = new Date().toISOString();
     const newBackup: BackupHistory = {
-      id: `backup-${Date.now()}`,
+      id: generateUniqueId('backup'),
       timestamp,
       fileName: `coaching_backup_${timestamp.slice(0, 10).replace(/-/g, '')}_manual.json`,
       fileSize: `${(Math.random() * 2 + 3).toFixed(2)} KB`,
@@ -341,7 +425,7 @@ function AppContent() {
     setBackupHistory(prev => [newBackup, ...prev]);
 
     const notif: AppNotification = {
-      id: `notif-${Date.now()}`,
+      id: generateUniqueId('notif'),
       title: 'Durable Cloud Backup Complete',
       message: 'Secure cloud databases backup succeeded. All active academic ledger databases synced safely in external bucket.',
       timestamp: new Date().toISOString(),
@@ -365,7 +449,7 @@ function AppContent() {
     setProgressRecords(newState.progress);
 
     const notif: AppNotification = {
-      id: `notif-${Date.now()}`,
+      id: generateUniqueId('notif'),
       title: 'Cloud State Reinstated',
       message: 'Successfully validated and restored student databases registry. Registers synchronized.',
       timestamp: new Date().toISOString(),
@@ -392,7 +476,7 @@ function AppContent() {
     }
 
     const testNotif: AppNotification = {
-      id: `test-${Date.now()}`,
+      id: generateUniqueId('test'),
       title,
       message,
       timestamp: new Date().toISOString(),
@@ -404,30 +488,18 @@ function AppContent() {
     triggerToast(testNotif);
   };
 
-  const handleRegisterAccount = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!regName || !regEmail) return;
 
-    const newAccount: UserAccount = {
-      id: `${regRole}-${Date.now()}`,
-      name: regName,
-      email: regEmail,
-      phone: regPhone || undefined,
-      role: regRole,
-      joinedDate: new Date().toLocaleDateString('en-US'),
-      specialization: regRole === 'instructor' ? 'General Academic Advisor' : undefined
-    };
 
-    setUsers(prev => [...prev, newAccount]);
-    setCurrentUser(newAccount);
-
-    // Reset inputs
-    setRegName('');
-    setRegEmail('');
-    setRegPhone('');
-  };
-
-  const handleCreateRegistrationRequest = (name: string, email: string, phone?: string, instructorId?: string) => {
+  const handleCreateRegistrationRequest = (
+    name: string, 
+    email: string, 
+    phone?: string, 
+    instructorId?: string,
+    fatherName?: string,
+    fatherPhone?: string,
+    address?: string,
+    lastQualification?: string
+  ) => {
     const cleanName = name.trim();
     const cleanEmail = email.trim().toLowerCase();
     
@@ -440,7 +512,7 @@ function AppContent() {
     const password = `Prism@${titleName}${randomNum}`;
 
     const newRequest: RegistrationRequest = {
-      id: `req-${Date.now()}`,
+      id: generateUniqueId('req'),
       name: cleanName,
       email: cleanEmail,
       phone: phone?.trim() || undefined,
@@ -448,14 +520,18 @@ function AppContent() {
       submittedDate: new Date().toLocaleDateString('en-US'),
       assignedInstructorId: instructorId || undefined,
       username,
-      password
+      password,
+      fatherName: fatherName?.trim() || undefined,
+      fatherPhone: fatherPhone?.trim() || undefined,
+      address: address?.trim() || undefined,
+      lastQualification: lastQualification?.trim() || undefined
     };
 
     setRegistrationRequests(prev => [newRequest, ...prev]);
 
     // Send a system event notice to the logs
     const notif: AppNotification = {
-      id: `notif-req-${Date.now()}`,
+      id: generateUniqueId('notif-req'),
       title: 'Admission Request Pending',
       message: `${cleanName} registered via fast student registration. Administrator approval required to release credentials.`,
       timestamp: new Date().toISOString(),
@@ -470,90 +546,137 @@ function AppContent() {
   };
 
   const handleApproveRegistration = (requestId: string) => {
-    setRegistrationRequests(prev => prev.map(r => {
-      if (r.id === requestId) {
-        // Find if already approved to prevent key conflicts
-        if (r.status === 'approved') return r;
-        
-        // Add user profile
-        const newStudent: UserAccount = {
-          id: `student-${Date.now()}`,
-          name: r.name,
-          email: r.email,
-          phone: r.phone,
-          role: 'student',
-          joinedDate: new Date().toLocaleDateString('en-US'),
-          assignedInstructorId: r.assignedInstructorId,
-          username: r.username,
-          password: r.password,
-          avatarUrl: `https://images.unsplash.com/photo-${['1534528741775-53994a69daeb', '1506794778202-cad84cf45f1d', '1517841905240-472988babdf9', '1492562080023-ab3db95bfbce'][Math.floor(Math.random() * 4)]}?w=150`
-        };
+    const r = registrationRequests.find(req => req.id === requestId);
+    if (!r || r.status !== 'pending') return;
 
-        setUsers(u => [...u, newStudent]);
+    // Add user profile
+    const newStudent: UserAccount = {
+      id: generateUniqueId('student'),
+      name: r.name,
+      email: r.email,
+      phone: r.phone,
+      role: 'student',
+      joinedDate: new Date().toLocaleDateString('en-US'),
+      assignedInstructorId: r.assignedInstructorId,
+      username: r.username,
+      password: r.password,
+      avatarUrl: `https://images.unsplash.com/photo-${['1534528741775-53994a69daeb', '1506794778202-cad84cf45f1d', '1517841905240-472988babdf9', '1492562080023-ab3db95bfbce'][Math.floor(Math.random() * 4)]}?w=150`,
+      fatherName: r.fatherName,
+      fatherPhone: r.fatherPhone,
+      address: r.address,
+      lastQualification: r.lastQualification
+    };
 
-        // Send simulated email
-        const newEmail: SimulatedEmail = {
-          id: `mail-${Date.now()}`,
-          to: r.email,
-          from: 'admissions@prismcoaching.edu',
-          subject: 'PrismCoaching Enrollment Accepted! - Your Credentials Enclosed',
-          body: `Dear ${r.name},\n\nWe are absolutely delighted to inform you that your Enrollment & Fast Student Registration Request has been reviewed and APPROVED by our Administration panel!\n\nYour profile has been fully instantiated into our student information database. You can now log in using the newly auto-generated security credentials enclosed below:\n\n-----------------------------\nUSERNAME: ${r.username}\nPASSWORD: ${r.password}\n-----------------------------\n\nPlease keep these credentials secure. Once signed in, you will be able to enroll into classes, audit tutor feedback records, and track your ongoing learning achievements.\n\nBest regards,\nAnik Baidya,\nHead Administrator, PrismCoaching Institute`,
-          timestamp: new Date().toISOString()
-        };
+    // Send simulated email
+    const newEmail: SimulatedEmail = {
+      id: generateUniqueId('mail'),
+      to: r.email,
+      from: 'admissions@prismcoaching.edu',
+      subject: 'PrismCoaching Enrollment Accepted! - Your Credentials Enclosed',
+      body: `Dear ${r.name},\n\nWe are absolutely delighted to inform you that your Enrollment & Fast Student Registration Request has been reviewed and APPROVED by our Administration panel!\n\nYour profile has been fully instantiated into our student information database. You can now log in using the newly auto-generated security credentials enclosed below:\n\n-----------------------------\nUSERNAME: ${r.username}\nPASSWORD: ${r.password}\n-----------------------------\n\nPlease keep these credentials secure. Once signed in, you will be able to enroll into classes, audit tutor feedback records, and track your ongoing learning achievements.\n\nBest regards,\nAnik Baidya,\nHead Administrator, PrismCoaching Institute`,
+      timestamp: new Date().toISOString()
+    };
 
-        setSimulatedEmails(m => [newEmail, ...m]);
+    // Trigger Notification
+    const notif: AppNotification = {
+      id: generateUniqueId('notif-appr'),
+      title: 'Admissions Request Accepted',
+      message: `Student account created for ${r.name}. Security credentials dispatched via simulated mail.`,
+      timestamp: new Date().toISOString(),
+      read: false,
+      type: 'enrollment',
+      channel: 'push'
+    };
 
-        // Trigger Notification
-        const notif: AppNotification = {
-          id: `notif-appr-${Date.now()}`,
-          title: 'Admissions Request Accepted',
-          message: `Student account created for ${r.name}. Security credentials dispatched via simulated mail.`,
-          timestamp: new Date().toISOString(),
-          read: false,
-          type: 'enrollment',
-          channel: 'push'
-        };
-        setNotifications(n => [notif, ...n]);
-        triggerToast(notif);
+    setUsers(u => [...u, newStudent]);
+    setSimulatedEmails(m => [newEmail, ...m]);
+    setNotifications(n => [notif, ...n]);
+    triggerToast(notif);
 
-        return { ...r, status: 'approved' };
+    setRegistrationRequests(prev => prev.map(req => {
+      if (req.id === requestId) {
+        return { ...req, status: 'approved' };
       }
-      return r;
+      return req;
     }));
   };
 
   const handleRejectRegistration = (requestId: string) => {
-    setRegistrationRequests(prev => prev.map(r => {
-      if (r.id === requestId) {
-        if (r.status !== 'pending') return r;
+    const r = registrationRequests.find(req => req.id === requestId);
+    if (!r || r.status !== 'pending') return;
 
-        // Send simulated email
-        const newEmail: SimulatedEmail = {
-          id: `mail-${Date.now()}`,
-          to: r.email,
-          from: 'admissions@prismcoaching.edu',
-          subject: 'PrismCoaching Registration Status Update',
-          body: `Dear ${r.name},\n\nThank you for submitting your Fast Student Registration Request with PrismCoaching.\n\nAfter reviewing your application coordinates, we regret to inform you that our classes are currently at maximum capacity, and we cannot approve your enrollment at this time.\n\nWe have retained your interest profile on our priority waiting list. Should seats open up in upcoming sessions, we will reach out immediately.\n\nBest regards,\nCenter Administration,\nPrismCoaching Institute`,
-          timestamp: new Date().toISOString()
-        };
+    // Send simulated email
+    const newEmail: SimulatedEmail = {
+      id: generateUniqueId('mail'),
+      to: r.email,
+      from: 'admissions@prismcoaching.edu',
+      subject: 'PrismCoaching Registration Status Update',
+      body: `Dear ${r.name},\n\nThank you for submitting your Fast Student Registration Request with PrismCoaching.\n\nAfter reviewing your application coordinates, we regret to inform you that our classes are currently at maximum capacity, and we cannot approve your enrollment at this time.\n\nWe have retained your interest profile on our priority waiting list. Should seats open up in upcoming sessions, we will reach out immediately.\n\nBest regards,\nCenter Administration,\nPrismCoaching Institute`,
+      timestamp: new Date().toISOString()
+    };
 
-        setSimulatedEmails(m => [newEmail, ...m]);
+    setSimulatedEmails(m => [newEmail, ...m]);
 
-        return { ...r, status: 'rejected' };
+    setRegistrationRequests(prev => prev.map(req => {
+      if (req.id === requestId) {
+        return { ...req, status: 'rejected' };
       }
-      return r;
+      return req;
     }));
+  };
+
+  const handleSendEmail = (toEmail: string, subject: string, body: string) => {
+    if (!currentUser) return;
+    const newEmail: SimulatedEmail = {
+      id: generateUniqueId('mail'),
+      to: toEmail,
+      from: currentUser.email,
+      subject: subject,
+      body: body,
+      timestamp: new Date().toISOString()
+    };
+
+    setSimulatedEmails(prev => [newEmail, ...prev]);
+
+    // If the recipient is indeed in our system, let's trigger a push notice
+    const targetUser = users.find(u => u.email.toLowerCase() === toEmail.toLowerCase());
+    if (targetUser) {
+      const notif: AppNotification = {
+        id: generateUniqueId('notif-mail'),
+        title: `New Message Delivered`,
+        message: `Simulated mail from ${currentUser.name} dispatched to ${targetUser.name}.`,
+        timestamp: new Date().toISOString(),
+        read: false,
+        type: 'reminder',
+        channel: 'email'
+      };
+      setNotifications(n => [notif, ...n]);
+      triggerToast(notif);
+    }
   };
 
   const handleFastStudentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!fastName || !fastEmail) return;
-    const req = handleCreateRegistrationRequest(fastName, fastEmail, fastPhone, fastInstructorId);
+    const req = handleCreateRegistrationRequest(
+      fastName, 
+      fastEmail, 
+      fastPhone, 
+      fastInstructorId,
+      fastFatherName,
+      fastFatherPhone,
+      fastAddress,
+      fastLastQualification
+    );
     setFastRegSuccess(req);
     setFastName('');
     setFastEmail('');
     setFastPhone('');
     setFastInstructorId('');
+    setFastFatherName('');
+    setFastFatherPhone('');
+    setFastAddress('');
+    setFastLastQualification('');
   };
 
   const handleCredentialsLogin = (e: React.FormEvent) => {
@@ -572,13 +695,28 @@ function AppContent() {
     }
   };
 
-  const handleLogout = () => {
-    setCurrentUser(null);
+  const handleAdminLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    const matched = users.find(u => 
+      u.username && u.username.toLowerCase() === loginUsername.trim().toLowerCase() && 
+      u.password && u.password === loginPassword.trim()
+    );
+    if (matched) {
+      if (matched.role === 'admin' || matched.role === 'sub-admin') {
+        setCurrentUser(matched);
+        setLoginUsername('');
+        setLoginPassword('');
+      } else {
+        setLoginError('Access Denied. This terminal is restricted to Administrator and Sub-Admin roles only.');
+      }
+    } else {
+      setLoginError('Invalid Administrator or Sub-Admin credentials. Ensure the account has been registered by a Head Administrator.');
+    }
   };
 
-  // Switch role profiles instantly (Developer/Guest Sandbox support)
-  const handleQuickLogin = (user: UserAccount) => {
-    setCurrentUser(user);
+  const handleLogout = () => {
+    setCurrentUser(null);
   };
 
   return (
@@ -724,33 +862,7 @@ function AppContent() {
                   </p>
                 </div>
 
-                <div className="space-y-2.5">
-                  <p className="text-[10px] font-mono font-bold tracking-wider text-slate-400 dark:text-gray-500 uppercase select-none">Quick Sandbox Logins</p>
-                  <div className="space-y-2">
-                    {users.filter(u => ['admin-1', 'instructor-1', 'student-1'].includes(u.id)).map(acc => (
-                      <button
-                        key={acc.id}
-                        type="button"
-                        onClick={() => handleQuickLogin(acc)}
-                        className="w-full text-left p-2.5 border border-slate-100 dark:border-white/5 hover:border-amber-500/50 dark:hover:border-amber-500/30 rounded-2xl bg-slate-50/40 dark:bg-[#161618] flex items-center justify-between transition hover:-translate-y-0.5 active:scale-98 cursor-pointer"
-                      >
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={acc.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'}
-                            alt={acc.name}
-                            referrerPolicy="no-referrer"
-                            className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-white/10"
-                          />
-                          <div>
-                            <p className="text-xs font-bold text-slate-800 dark:text-gray-200">{acc.name}</p>
-                            <p className="text-[9.5px] text-slate-450 dark:text-gray-400 capitalize">{acc.role} simulator</p>
-                          </div>
-                        </div>
-                        <ChevronRight className="w-3.5 h-3.5 text-slate-400 dark:text-amber-500" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
+
               </div>
 
               {/* Simulated Mail Client Mini-App */}
@@ -793,140 +905,233 @@ function AppContent() {
             </div>
 
             {/* Right section: Signup workspace and authentication */}
-            <div className="md:col-span-12 lg:col-span-7 bg-slate-50/50 dark:bg-[#161618] p-6 rounded-2xl border border-slate-100 dark:border-white/5 space-y-5 flex flex-col justify-start">
+            <div className="md:col-span-12 lg:col-span-7 bg-white dark:bg-[#111112] p-8 rounded-3xl border border-slate-150 dark:border-white/5 space-y-6 flex flex-col justify-start shadow-xl relative animate-fadeIn">
+              <div className="absolute top-0 right-0 h-32 w-32 bg-radial-gradient from-amber-500/10 to-transparent rounded-full pointer-events-none" />
               
               {/* Onboarding Mode Selection Tabs */}
-              <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 dark:bg-[#0A0A0B] rounded-2xl border dark:border-white/5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 p-1 bg-slate-50 dark:bg-[#070708] rounded-2xl border border-slate-150 dark:border-white/5">
                 <button
                   type="button"
-                  onClick={() => setOnboardingTab('fastReg')}
-                  className={`py-2 px-1 rounded-xl text-center font-bold text-[10px] sm:text-[10.5px] transition cursor-pointer leading-tight ${
+                  onClick={() => { setOnboardingTab('fastReg'); setLoginError(''); }}
+                  className={`py-3 px-3 rounded-xl text-center font-bold text-xs transition-all duration-300 cursor-pointer flex items-center justify-center gap-2 ${
                     onboardingTab === 'fastReg'
-                      ? 'bg-white dark:bg-[#161618] text-amber-500 dark:text-amber-500 shadow-xs border dark:border-white/5'
-                      : 'text-slate-550 dark:text-gray-450 hover:text-amber-505'
+                      ? 'bg-white dark:bg-[#1C1C1E] text-amber-500 dark:text-amber-500 shadow-md border border-slate-100 dark:border-white/5 scale-[1.02]'
+                      : 'text-slate-500 dark:text-gray-400 hover:text-amber-500 hover:bg-slate-50/50 dark:hover:bg-white/5'
                   }`}
                 >
-                  Fast Student Reg
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Admission
                 </button>
                 <button
                   type="button"
-                  onClick={() => setOnboardingTab('authLogin')}
-                  className={`py-2 px-1 rounded-xl text-center font-bold text-[10px] sm:text-[10.5px] transition cursor-pointer leading-tight ${
+                  onClick={() => { setOnboardingTab('authLogin'); setLoginError(''); }}
+                  className={`py-3 px-3 rounded-xl text-center font-bold text-xs transition-all duration-300 cursor-pointer flex items-center justify-center gap-2 ${
                     onboardingTab === 'authLogin'
-                      ? 'bg-white dark:bg-[#161618] text-amber-500 dark:text-amber-500 shadow-xs border dark:border-white/5'
-                      : 'text-slate-550 dark:text-gray-450 hover:text-amber-505'
+                      ? 'bg-white dark:bg-[#1C1C1E] text-amber-500 dark:text-amber-500 shadow-md border border-slate-100 dark:border-white/5 scale-[1.02]'
+                      : 'text-slate-500 dark:text-gray-400 hover:text-amber-500 hover:bg-slate-50/50 dark:hover:bg-white/5'
                   }`}
                 >
-                  Log In (Credentials)
+                  <Lock className="w-3.5 h-3.5" />
+                  Approved Sign In
                 </button>
                 <button
                   type="button"
-                  onClick={() => setOnboardingTab('sandboxCreate')}
-                  className={`py-2 px-1 rounded-xl text-center font-bold text-[10px] sm:text-[10.5px] transition cursor-pointer leading-tight ${
-                    onboardingTab === 'sandboxCreate'
-                      ? 'bg-white dark:bg-[#161618] text-amber-500 dark:text-amber-500 shadow-xs border dark:border-white/5'
-                      : 'text-slate-550 dark:text-gray-450 hover:text-amber-505'
+                  onClick={() => { setOnboardingTab('adminLogin'); setLoginError(''); }}
+                  className={`py-3 px-3 rounded-xl text-center font-bold text-xs transition-all duration-300 cursor-pointer flex items-center justify-center gap-2 ${
+                    onboardingTab === 'adminLogin'
+                      ? 'bg-white dark:bg-[#1C1C1E] text-amber-500 dark:text-amber-500 shadow-md border border-slate-100 dark:border-white/5 scale-[1.02]'
+                      : 'text-slate-500 dark:text-gray-400 hover:text-amber-500 hover:bg-slate-50/50 dark:hover:bg-white/5'
                   }`}
                 >
-                  Direct Sandbox
+                  <Shield className="w-3.5 h-3.5" />
+                  Admin Sign In
                 </button>
               </div>
 
               {/* Form 1: Fast Student Registration */}
               {onboardingTab === 'fastReg' && (
-                <div className="space-y-4 flex-1 flex flex-col justify-between">
-                  <div className="space-y-3">
+                <div className="space-y-5 flex-1 flex flex-col justify-between">
+                  <div className="space-y-4">
                     <div>
-                      <h3 className="text-base font-serif italic text-amber-500 font-bold">Fast Student Registration</h3>
-                      <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
-                        Register into teaching classrooms. Administrators audit queue metrics, generate security credentials on acceptance, and dispatch login values to your mailbox.
+                      <h3 className="text-xl font-serif italic text-amber-500 font-bold tracking-tight">Student Admission Portal</h3>
+                      <p className="text-xs text-slate-500 dark:text-gray-400 mt-1 leading-relaxed">
+                        Register to enter our coaching workflow. Administrators dynamically review queue requests, issue verified account records upon acceptance, and securely dispatch login details to your inbox.
                       </p>
                     </div>
 
                     {fastRegSuccess ? (
                       <motion.div
-                        initial={{ opacity: 0, scale: 0.98 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="p-4 rounded-2xl bg-emerald-500/[0.03] border border-emerald-500/20 space-y-3 text-xs text-slate-750 dark:text-emerald-300"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-5 rounded-2xl bg-emerald-500/[0.02] border border-emerald-500/20 space-y-4 text-xs text-slate-705 dark:text-emerald-400 shadow-inner"
                       >
-                        <p className="font-bold flex items-center gap-1.5 text-emerald-500">
-                          <Check className="w-4 h-4" /> Application Submitted!
-                        </p>
+                        <div className="flex items-center gap-2 text-emerald-500 font-bold text-sm">
+                          <span className="p-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                            <Check className="w-4 h-4" />
+                          </span>
+                          <span>Admission Form Logged Successfully!</span>
+                        </div>
                         <p className="leading-relaxed text-slate-650 dark:text-gray-300">
-                          Registration folder for <b>{fastRegSuccess.name}</b> has successfully lodged into the administration system stream.
+                          The admissions queue ticket for student <b className="text-slate-800 dark:text-white">{fastRegSuccess.name}</b> has been securely enqueued in the active admin ledger.
                         </p>
-                        <div className="p-3 bg-slate-900/60 rounded-xl border border-emerald-500/10 space-y-1.5 font-mono text-[10px] text-gray-300 leading-relaxed">
-                          <p className="font-bold text-amber-500">SIMULATION ADVANCEMENT GUIDE:</p>
-                          <p>1. Switch role to <b>Anik Baidya (Admin)</b> simulator on the left column.</p>
-                          <p>2. Go to the <b>Student Profiles Registry</b> tab.</p>
-                          <p>3. Click <b>Accept & Enroll</b> on {fastRegSuccess.name}'s ticket.</p>
-                          <p>4. Use the <b>Simulated Mail client</b> below with email <b>{fastRegSuccess.email}</b> to retrieve your generated security credentials!</p>
+                        <div className="p-4 bg-slate-900/90 dark:bg-[#070708] rounded-xl border border-emerald-500/10 space-y-2.5 font-mono text-[10.5px] text-gray-300 leading-relaxed shadow-sm">
+                          <p className="font-bold text-amber-500 flex items-center gap-1.5 uppercase tracking-wider text-[9.5px]">
+                            <Sparkles className="w-3.5 h-3.5" /> Simulation Step-by-Step Guide:
+                          </p>
+                          <p className="flex items-start gap-1">
+                            <span className="text-amber-550 font-bold">1.</span>
+                            <span>Switch simulator role to <b>Anik Baidya (Admin)</b> using the left panel.</span>
+                          </p>
+                          <p className="flex items-start gap-1">
+                            <span className="text-amber-550 font-bold">2.</span>
+                            <span>Open the <b>Student Profiles Registry</b> dashboard tab.</span>
+                          </p>
+                          <p className="flex items-start gap-1">
+                            <span className="text-amber-550 font-bold">3.</span>
+                            <span>Locate the entry for <b>{fastRegSuccess.name}</b> and click <b>Accept & Enroll</b>.</span>
+                          </p>
+                          <p className="flex items-start gap-1">
+                            <span className="text-amber-555 font-bold">4.</span>
+                            <span>Use the <b>Simulated Mail Client</b> on the left to read credentials generated for <b className="text-amber-555">{fastRegSuccess.email}</b>.</span>
+                          </p>
                         </div>
                         <button
                           type="button"
                           onClick={() => setFastRegSuccess(null)}
-                          className="pt-1 text-[11px] font-bold text-emerald-500 underline hover:text-emerald-400 cursor-pointer block"
+                          className="text-[11px] font-bold text-emerald-500 hover:text-emerald-400 hover:underline cursor-pointer block transition-all"
                         >
-                          Submit another fast registration &rarr;
+                          Submit another fast onboarding request &rarr;
                         </button>
                       </motion.div>
                     ) : (
-                      <form onSubmit={handleFastStudentSubmit} className="space-y-3">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-semibold">Full Name</label>
-                          <input
-                            type="text"
-                            required
-                            placeholder="e.g. Samuel Wilson"
-                            value={fastName}
-                            onChange={e => setFastName(e.target.value)}
-                            className="w-full px-3 py-2 text-xs bg-white dark:bg-[#0F0F11] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-slate-850 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 font-sans"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-semibold">Email ID Address</label>
-                            <input
-                              type="email"
-                              required
-                              placeholder="sam@example.com"
-                              value={fastEmail}
-                              onChange={e => setFastEmail(e.target.value)}
-                              className="w-full px-3 py-2 text-xs bg-white dark:bg-[#0F0F11] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 font-sans"
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-semibold">Phone Number (Optional)</label>
+                      <form onSubmit={handleFastStudentSubmit} className="space-y-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Full Legal Name</label>
+                          <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                              <User className="h-4 w-4 text-slate-400 dark:text-gray-500" />
+                            </div>
                             <input
                               type="text"
-                              placeholder="+1 (555) 0192"
-                              value={fastPhone}
-                              onChange={e => setFastPhone(e.target.value)}
-                              className="w-full px-3 py-2 text-xs bg-white dark:bg-[#0F0F11] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 font-sans"
+                              required
+                              placeholder="e.g. Samuel Wilson"
+                              value={fastName}
+                              onChange={e => setFastName(e.target.value)}
+                              className="w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-850 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-sans"
                             />
                           </div>
                         </div>
 
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-semibold">Mentor Advisor Preference</label>
-                          <select
-                            value={fastInstructorId}
-                            onChange={e => setFastInstructorId(e.target.value)}
-                            className="w-full px-3 py-2 text-xs bg-white dark:bg-[#0F0F11] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-slate-855 dark:text-gray-200 font-sans cursor-pointer"
-                          >
-                            <option value="">No preference mentor</option>
-                            {users.filter(u => u.role === 'instructor').map(ins => (
-                              <option key={ins.id} value={ins.id}>mentor: {ins.name} ({ins.specialization})</option>
-                            ))}
-                          </select>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Email Address</label>
+                            <div className="relative">
+                              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                <Mail className="h-4 w-4 text-slate-400 dark:text-gray-500" />
+                              </div>
+                              <input
+                                type="email"
+                                required
+                                placeholder="sam@example.com"
+                                value={fastEmail}
+                                onChange={e => setFastEmail(e.target.value)}
+                                className="w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-sans"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Phone Number (Optional)</label>
+                            <div className="relative">
+                              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                <Smartphone className="h-4 w-4 text-slate-400 dark:text-gray-500" />
+                              </div>
+                              <input
+                                type="text"
+                                placeholder="+1 (555) 0192"
+                                value={fastPhone}
+                                onChange={e => setFastPhone(e.target.value)}
+                                className="w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-sans"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Father's Name</label>
+                            <div className="relative">
+                              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                <User className="h-4 w-4 text-slate-400 dark:text-gray-500" />
+                              </div>
+                              <input
+                                type="text"
+                                required
+                                placeholder="e.g. Arthur Wilson"
+                                value={fastFatherName}
+                                onChange={e => setFastFatherName(e.target.value)}
+                                className="w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-sans"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Father's Phone Number</label>
+                            <div className="relative">
+                              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                <Smartphone className="h-4 w-4 text-slate-400 dark:text-gray-500" />
+                              </div>
+                              <input
+                                type="text"
+                                required
+                                placeholder="e.g. +1 (555) 0145"
+                                value={fastFatherPhone}
+                                onChange={e => setFastFatherPhone(e.target.value)}
+                                className="w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-sans"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Residential Address</label>
+                          <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                              <MapPin className="h-4 w-4 text-slate-400 dark:text-gray-500" />
+                            </div>
+                            <input
+                              type="text"
+                              required
+                              placeholder="e.g. 742 Evergreen Terrace, Springfield"
+                              value={fastAddress}
+                              onChange={e => setFastAddress(e.target.value)}
+                              className="w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-850 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-sans"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Last Qualification</label>
+                          <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                              <GraduationCap className="h-4 w-4 text-slate-400 dark:text-gray-500" />
+                            </div>
+                            <input
+                              type="text"
+                              required
+                              placeholder="e.g. High School Diploma (Grade 12) / AP Classes"
+                              value={fastLastQualification}
+                              onChange={e => setFastLastQualification(e.target.value)}
+                              className="w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-850 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-sans"
+                            />
+                          </div>
                         </div>
 
                         <button
                           type="submit"
-                          className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-amber-950 font-bold rounded-xl text-xs shadow-md transition active:scale-98 cursor-pointer mt-2"
+                          className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-amber-955 font-extrabold rounded-xl text-xs shadow-md shadow-amber-500/10 hover:shadow-lg hover:shadow-amber-500/15 transition-all active:scale-98 cursor-pointer mt-3 flex items-center justify-center gap-2"
                         >
+                          <Sparkles className="w-3.5 h-3.5" />
                           Submit Admission Application
                         </button>
                       </form>
@@ -937,12 +1142,12 @@ function AppContent() {
 
               {/* Form 2: Username/Password authentication login */}
               {onboardingTab === 'authLogin' && (
-                <div className="space-y-4 flex-1 flex flex-col justify-between">
-                  <div className="space-y-3">
+                <div className="space-y-5 flex-1 flex flex-col justify-between">
+                  <div className="space-y-4">
                     <div>
-                      <h3 className="text-base font-serif italic text-amber-500 font-bold">Approved Account Login</h3>
-                      <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
-                        Log in using your secure auto-generated credentials (USERNAME & PASSWORD) dispatched to your simulated inbox.
+                      <h3 className="text-xl font-serif italic text-amber-500 font-bold tracking-tight">Approved Account Login</h3>
+                      <p className="text-xs text-slate-500 dark:text-gray-400 mt-1 leading-relaxed">
+                        Access your profile, courses, and educational schedules using the verified credentials (USERNAME & PASSWORD) delivered to your simulated student inbox.
                       </p>
                     </div>
 
@@ -953,35 +1158,46 @@ function AppContent() {
                       </div>
                     )}
 
-                    <form onSubmit={handleCredentialsLogin} className="space-y-3">
-                      <div className="space-y-1 animate-fadeIn">
-                        <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-semibold">Approved Username</label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. samantha_wilson_822"
-                          value={loginUsername}
-                          onChange={e => setLoginUsername(e.target.value)}
-                          className="w-full px-3 py-2.5 text-xs bg-white dark:bg-[#0F0F11] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 font-mono"
-                        />
+                    <form onSubmit={handleCredentialsLogin} className="space-y-4">
+                      <div className="space-y-1.5 animate-fadeIn">
+                        <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Approved Username</label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <User className="h-4 w-4 text-slate-400 dark:text-gray-500" />
+                          </div>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. samantha_wilson_822"
+                            value={loginUsername}
+                            onChange={e => setLoginUsername(e.target.value)}
+                            className="w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-mono"
+                          />
+                        </div>
                       </div>
 
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-semibold">Security Password</label>
-                        <input
-                          type="password"
-                          required
-                          placeholder="••••••••"
-                          value={loginPassword}
-                          onChange={e => setLoginPassword(e.target.value)}
-                          className="w-full px-3 py-2.5 text-xs bg-white dark:bg-[#0F0F11] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 font-sans"
-                        />
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider font-semibold">Security Password</label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <Lock className="h-4 w-4 text-slate-400 dark:text-gray-500" />
+                          </div>
+                          <input
+                            type="password"
+                            required
+                            placeholder="••••••••"
+                            value={loginPassword}
+                            onChange={e => setLoginPassword(e.target.value)}
+                            className="w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-sans"
+                          />
+                        </div>
                       </div>
 
                       <button
                         type="submit"
-                        className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-amber-955 font-bold rounded-xl text-xs shadow-md transition active:scale-98 cursor-pointer mt-2"
+                        className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-amber-955 font-extrabold rounded-xl text-xs shadow-md shadow-amber-500/10 hover:shadow-lg hover:shadow-amber-500/15 transition-all active:scale-98 cursor-pointer mt-3 flex items-center justify-center gap-2"
                       >
+                        <Lock className="w-3.5 h-3.5" />
                         Sign In with Credentials &rarr;
                       </button>
                     </form>
@@ -989,86 +1205,86 @@ function AppContent() {
                 </div>
               )}
 
-              {/* Form 3: Direct Sandbox creator */}
-              {onboardingTab === 'sandboxCreate' && (
-                <div className="space-y-4 flex-1 flex flex-col justify-between">
-                  <div className="space-y-3">
+              {/* Form 3: Administrator Sign In */}
+              {onboardingTab === 'adminLogin' && (
+                <div className="space-y-5 flex-1 flex flex-col justify-between">
+                  <div className="space-y-4">
                     <div>
-                      <h3 className="text-base font-serif italic text-amber-500 font-bold">Direct Sandbox Creator</h3>
-                      <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
-                        Instantly instantiate and load a full-scale tester account with any privileges inside this browser sandbox.
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="p-0.5 px-2 bg-amber-500/15 border border-amber-500/25 text-amber-500 rounded-lg text-[9px] font-mono font-bold uppercase select-none tracking-wider">
+                          🛡️ RESTRICTED ENTRY
+                        </span>
+                      </div>
+                      <h3 className="text-xl font-serif italic text-amber-500 font-bold tracking-tight">Admin Terminal Sign In</h3>
+                      <p className="text-xs text-slate-500 dark:text-gray-400 mt-1 leading-relaxed">
+                        Access PrismCoaching's administrative panel, review student profiles, dispatch registration emails, and perform full ledger cleanups.
                       </p>
                     </div>
 
-                    <form onSubmit={handleRegisterAccount} className="space-y-3">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-semibold">User Role Sandbox</label>
-                        <div className="grid grid-cols-3 gap-1.5">
-                          {(['student', 'instructor', 'admin'] as const).map(role => (
-                            <button
-                              key={role}
-                              type="button"
-                              onClick={() => setRegRole(role)}
-                              className={`py-2 px-1 rounded-xl text-center font-bold text-xs capitalize border transition cursor-pointer ${
-                                regRole === role
-                                  ? 'bg-slate-900 text-white border-slate-900 dark:bg-amber-500 dark:text-amber-950 dark:border-amber-500 shadow-sm'
-                                  : 'bg-white text-slate-600 border-slate-200 dark:bg-[#0F0F11] dark:text-gray-400 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5'
-                              }`}
-                            >
-                              {role}
-                            </button>
-                          ))}
-                        </div>
+                    {loginError && (
+                      <div className="p-3 bg-rose-500/10 border border-rose-500/25 rounded-xl text-rose-500 text-xs leading-relaxed flex gap-2">
+                        <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <span>{loginError}</span>
                       </div>
+                    )}
 
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-semibold">Full Name</label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. John Doe"
-                          value={regName}
-                          onChange={e => setRegName(e.target.value)}
-                          className="w-full px-3 py-2 text-xs bg-white dark:bg-[#0F0F11] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 font-sans"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-semibold">Email ID Address</label>
-                          <input
-                            type="email"
-                            required
-                            placeholder="john@prism.edu"
-                            value={regEmail}
-                            onChange={e => setRegEmail(e.target.value)}
-                            className="w-full px-3 py-2 text-xs bg-white dark:bg-[#0F0F11] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 font-sans"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-semibold">Phone (Optional)</label>
+                    <form onSubmit={handleAdminLogin} className="space-y-4">
+                      <div className="space-y-1.5 animate-fadeIn">
+                        <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider">Admin Username</label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <User className="h-4 w-4 text-slate-400 dark:text-gray-500" />
+                          </div>
                           <input
                             type="text"
-                            placeholder="+1 (555) 7744"
-                            value={regPhone}
-                            onChange={e => setRegPhone(e.target.value)}
-                            className="w-full px-3 py-2 text-xs bg-white dark:bg-[#0F0F11] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 font-sans"
+                            required
+                            placeholder="e.g. anik"
+                            value={loginUsername}
+                            onChange={e => setLoginUsername(e.target.value)}
+                            className="w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-mono uppercase text-slate-400 dark:text-gray-500 block font-bold tracking-wider font-semibold">Security Password</label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <Key className="h-4 w-4 text-slate-400 dark:text-gray-500" />
+                          </div>
+                          <input
+                            type="password"
+                            required
+                            placeholder="••••••••"
+                            value={loginPassword}
+                            onChange={e => setLoginPassword(e.target.value)}
+                            className="w-full pl-10 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-[#070708] rounded-xl border border-slate-200 dark:border-white/5 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-855 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-600 transition-all font-sans"
                           />
                         </div>
                       </div>
 
                       <button
-                        type="submit"
-                        className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-amber-950 font-bold rounded-xl text-xs shadow-md transition active:scale-98 cursor-pointer mt-2"
+                        type="button"
+                        onClick={() => {
+                          setLoginUsername('anik');
+                          setLoginPassword('anik');
+                        }}
+                        className="text-[11px] text-amber-500 hover:text-amber-600 font-bold block transition cursor-pointer hover:underline"
                       >
-                        Spawn Account & Enter Center Group
+                        ⚡ Autofill Demo Admin Credentials
+                      </button>
+
+                      <button
+                        type="submit"
+                        className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-amber-955 font-extrabold rounded-xl text-xs shadow-md shadow-amber-500/10 hover:shadow-lg hover:shadow-amber-500/15 transition-all active:scale-98 cursor-pointer mt-3 flex items-center justify-center gap-2"
+                      >
+                        <Shield className="w-3.5 h-3.5" />
+                        Acknowledge & Sign In to Console &rarr;
                       </button>
                     </form>
                   </div>
                 </div>
               )}
-
             </div>
 
           </div>
@@ -1177,6 +1393,23 @@ function AppContent() {
                   Analytics Reports & Exports
                 </button>
 
+                <button
+                  onClick={() => setActiveTab('inbox')}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition relative ${
+                    activeTab === 'inbox'
+                      ? 'bg-amber-500/10 border border-amber-500/20 text-text-amber-500 text-amber-500 font-bold'
+                      : 'text-slate-550 dark:text-gray-400 hover:text-amber-500 dark:hover:text-gray-100 hover:bg-slate-50 dark:hover:bg-[#161618] border border-transparent'
+                  }`}
+                >
+                  <Mail className="w-4 h-4" />
+                  Secure Mailbox
+                  {simulatedEmails.filter(m => m.to.toLowerCase() === currentUser.email.toLowerCase()).length > 0 && (
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 min-w-[16px] h-4 leading-none text-[9.5px] font-mono font-bold bg-amber-500 text-amber-950 px-1 rounded-full flex items-center justify-center border border-white dark:border-[#161618]">
+                      {simulatedEmails.filter(m => m.to.toLowerCase() === currentUser.email.toLowerCase()).length}
+                    </span>
+                  )}
+                </button>
+
                 {currentUser.role === 'admin' && (
                   <button
                     onClick={() => setActiveTab('backup')}
@@ -1237,7 +1470,7 @@ function AppContent() {
                 </div>
 
                 {/* Dashboard summary stats based on current user role */}
-                {currentUser.role === 'admin' && (
+                {['admin', 'sub-admin'].includes(currentUser.role) && (
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
                     <div className="bg-white dark:bg-[#161618] border border-slate-150/80 dark:border-white/5 rounded-2xl p-5 shadow-sm space-y-1 flex flex-col justify-between">
                       <div>
@@ -1393,9 +1626,14 @@ function AppContent() {
                 currentUser={currentUser}
                 students={users.filter(u => u.role === 'student')}
                 instructors={users.filter(u => u.role === 'instructor')}
+                subAdmins={users.filter(u => u.role === 'sub-admin')}
                 schedules={schedules}
                 onAddStudent={handleAddStudent}
+                onAddInstructor={handleAddInstructor}
+                onAddSubAdmin={handleAddSubAdmin}
                 onRemoveStudent={handleRemoveStudent}
+                onRemoveInstructor={handleRemoveInstructor}
+                onRemoveSubAdmin={handleRemoveSubAdmin}
                 onEnrollStudentInClass={handleEnrollStudentInClass}
                 registrationRequests={registrationRequests}
                 onApproveRequest={handleApproveRegistration}
@@ -1430,6 +1668,15 @@ function AppContent() {
                 students={users.filter(u => u.role === 'student')}
                 schedules={schedules}
                 progressRecords={progressRecords}
+              />
+            )}
+
+            {activeTab === 'inbox' && (
+              <MailboxManager
+                currentUser={currentUser}
+                users={users}
+                simulatedEmails={simulatedEmails}
+                onSendEmail={handleSendEmail}
               />
             )}
 
