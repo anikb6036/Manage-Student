@@ -129,7 +129,7 @@ npm run dev
 The application will run on:
 
 ```bash
-http://localhost:5000
+http://localhost:3000
 ```
 
 ---
@@ -221,8 +221,7 @@ This project is licensed under the MIT License.
 
 GitHub: https://github.com/anikb6036
 
-Email: your-email@example.com
+Email: anik.baidya@hotmail.com
 
 ---
 
-⭐ If you like this project, please give it a star on GitHub!
