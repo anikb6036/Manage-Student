@@ -52,7 +52,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 
 // Auto-detect and perform a one-time clean-up migration of old dummy/simulation storage data
-if (typeof window !== 'undefined' && !localStorage.getItem('db-migrated-to-real-v4')) {
+if (typeof window !== 'undefined' && !localStorage.getItem('db-migrated-to-real-v5')) {
   localStorage.removeItem('db-users');
   localStorage.removeItem('db-schedules');
   localStorage.removeItem('db-progress');
@@ -61,7 +61,7 @@ if (typeof window !== 'undefined' && !localStorage.getItem('db-migrated-to-real-
   localStorage.removeItem('db-registration-requests');
   localStorage.removeItem('db-simulated-emails');
   localStorage.removeItem('active-user');
-  localStorage.setItem('db-migrated-to-real-v4', 'true');
+  localStorage.setItem('db-migrated-to-real-v5', 'true');
 }
 
 const generateUniqueId = (prefix: string) => {
@@ -1354,7 +1354,13 @@ function AppContent() {
                   }`}
                 >
                   <Users className="w-4 h-4" />
-                  Student Profiles Registry
+                  {currentUser.role === 'admin' 
+                    ? 'Accounts & Enrollments' 
+                    : currentUser.role === 'sub-admin' 
+                      ? 'Enrollments & Faculty' 
+                      : currentUser.role === 'instructor' 
+                        ? 'Student Profiles Registry' 
+                        : 'My Student Profile'}
                 </button>
 
                 <button

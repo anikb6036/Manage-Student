@@ -17,6 +17,41 @@ export const INITIAL_USERS: UserAccount[] = [
     joinedDate: '2024-05-20',
     username: 'anik',
     password: 'anik'
+  },
+  {
+    id: 'instructor-1',
+    name: 'Prof. Sarah Connor',
+    email: 'sarah@prismcoaching.com',
+    role: 'instructor',
+    avatarUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
+    phone: '+1 (555) 0121',
+    joinedDate: '2024-05-21',
+    specialization: 'Advanced Science & Physics',
+    username: 'sarah',
+    password: 'sarah'
+  },
+  {
+    id: 'subadmin-1',
+    name: 'Marcus Wright',
+    email: 'marcus@prismcoaching.com',
+    role: 'sub-admin',
+    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+    phone: '+1 (555) 0122',
+    joinedDate: '2024-05-22',
+    username: 'marcus',
+    password: 'marcus'
+  },
+  {
+    id: 'student-1',
+    name: 'John Connor',
+    email: 'john@prismcoaching.com',
+    role: 'student',
+    avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
+    phone: '+1 (555) 0123',
+    joinedDate: '2024-05-23',
+    username: 'john',
+    password: 'john',
+    assignedInstructorId: 'instructor-1'
   }
 ];
 

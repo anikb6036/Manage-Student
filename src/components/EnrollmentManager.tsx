@@ -153,6 +153,17 @@ export default function EnrollmentManager({
     return matchesSearch && matchesInstructor;
   });
 
+  const filteredInstructors = instructors.filter(ins => {
+    return ins.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+           ins.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           (ins.specialization && ins.specialization.toLowerCase().includes(searchTerm.toLowerCase()));
+  });
+
+  const filteredSubAdmins = subAdmins.filter(sa => {
+    return sa.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+           sa.email.toLowerCase().includes(searchTerm.toLowerCase());
+  });
+
   const getInstructorName = (instructorId?: string) => {
     if (!instructorId) return 'Not Assigned';
     const found = instructors.find(i => i.id === instructorId);
@@ -645,7 +656,7 @@ export default function EnrollmentManager({
         <div className="flex border-b border-slate-100 dark:border-white/5 mb-6 gap-6 text-xs font-bold leading-relaxed">
           <button
             type="button"
-            onClick={() => setActiveListView('students')}
+            onClick={() => { setActiveListView('students'); setSearchTerm(''); }}
             className={`pb-3 relative transition-all cursor-pointer ${
               activeListView === 'students'
                 ? 'text-amber-500'
@@ -661,7 +672,7 @@ export default function EnrollmentManager({
           {['admin', 'sub-admin'].includes(currentUser.role) && (
             <button
               type="button"
-              onClick={() => setActiveListView('instructors')}
+              onClick={() => { setActiveListView('instructors'); setSearchTerm(''); }}
               className={`pb-3 relative transition-all cursor-pointer ${
                 activeListView === 'instructors'
                   ? 'text-amber-500'
@@ -678,7 +689,7 @@ export default function EnrollmentManager({
           {currentUser.role === 'admin' && (
             <button
               type="button"
-              onClick={() => setActiveListView('sub-admins')}
+              onClick={() => { setActiveListView('sub-admins'); setSearchTerm(''); }}
               className={`pb-3 relative transition-all cursor-pointer ${
                 activeListView === 'sub-admins'
                   ? 'text-amber-500'
@@ -693,37 +704,46 @@ export default function EnrollmentManager({
           )}
         </div>
 
+        {/* Universal Filter Toolbar */}
+        <div className="flex flex-col md:flex-row gap-3.5 mb-5 max-w-4xl font-sans">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
+            <input
+              type="text"
+              placeholder={
+                activeListView === 'students'
+                  ? "Search students by name or email ID..."
+                  : activeListView === 'instructors'
+                    ? "Search instructors by name, email, or specialization topic..."
+                    : "Search sub-administrators by name or email..."
+              }
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 text-xs border border-slate-200 dark:border-white/5 dark:bg-[#0F0F11] rounded-xl text-slate-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+            />
+          </div>
+
+          {activeListView === 'students' && (
+            <div className="flex items-center gap-2">
+              <Filter className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                value={selectedInstructorId}
+                onChange={e => setSelectedInstructorId(e.target.value)}
+                className="border border-slate-200 dark:border-white/5 rounded-xl px-3 py-2.5 text-xs bg-white dark:bg-[#0F0F11] text-slate-705 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500/20 font-sans"
+              >
+                <option value="all">Mentor Filter: All</option>
+                {instructors.map(ins => (
+                  <option key={ins.id} value={ins.id}>
+                    Mentor: {ins.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
         {activeListView === 'students' ? (
           <>
-            {/* Filter Toolbar */}
-            <div className="flex flex-col md:flex-row gap-3.5 mb-5 max-w-4xl font-sans">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
-                <input
-                  type="text"
-                  placeholder="Search students by name or email ID..."
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 text-xs border border-slate-200 dark:border-white/5 dark:bg-[#0F0F11] rounded-xl text-slate-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Filter className="w-3.5 h-3.5 text-slate-400" />
-                <select
-                  value={selectedInstructorId}
-                  onChange={e => setSelectedInstructorId(e.target.value)}
-                  className="border border-slate-200 dark:border-white/5 rounded-xl px-3 py-2.5 text-xs bg-white dark:bg-[#0F0F11] text-slate-705 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500/20 font-sans"
-                >
-                  <option value="all">Mentor Filter: All</option>
-                  {instructors.map(ins => (
-                    <option key={ins.id} value={ins.id}>
-                      Mentor: {ins.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
 
             {/* Students Table/Grid */}
             <div className="overflow-x-auto border border-slate-100 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900">
@@ -890,14 +910,14 @@ export default function EnrollmentManager({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                {instructors.length === 0 ? (
+                {filteredInstructors.length === 0 ? (
                   <tr>
                     <td colSpan={['admin', 'sub-admin'].includes(currentUser.role) ? 5 : 4} className="p-10 text-center text-slate-400 font-mono">
-                      No instructor registrations found. Registered instructors will appear here.
+                      {searchTerm ? "No instructor registrations found matching search query." : "No instructor registrations found. Registered instructors will appear here."}
                     </td>
                   </tr>
                 ) : (
-                  instructors.map(ins => (
+                  filteredInstructors.map(ins => (
                     <tr key={ins.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/5 transition">
                       <td className="p-4 flex items-center gap-3">
                         <img
@@ -960,14 +980,14 @@ export default function EnrollmentManager({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                {subAdmins.length === 0 ? (
+                {filteredSubAdmins.length === 0 ? (
                   <tr>
                     <td colSpan={currentUser.role === 'admin' ? 5 : 4} className="p-10 text-center text-slate-400 font-mono">
-                      No sub-admin registrations found. Registered sub-admin accounts will appear here.
+                      {searchTerm ? "No sub-admin registrations found matching search query." : "No sub-admin registrations found. Registered sub-admin accounts will appear here."}
                     </td>
                   </tr>
                 ) : (
-                  subAdmins.map(sa => (
+                  filteredSubAdmins.map(sa => (
                     <tr key={sa.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/5 transition">
                       <td className="p-4 flex items-center gap-3">
                         <img
